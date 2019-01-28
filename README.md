@@ -1,5 +1,7 @@
 # synapse-netcore-workers
-An experimental project to build Synapse-compatible workers in .NET Core.
+
+An experimental project to build Synapse-compatible workers in .NET Core. For questions or development news, visit 
+[#synapse-netcore-workers:t2bot.io](https://matrix.to/#/#synapse-netcore-workers:t2bot.io) on Matrix.
 
 **Not intended for production usage yet.**
 
