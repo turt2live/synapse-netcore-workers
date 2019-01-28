@@ -26,9 +26,6 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
 
         private static async void StartReplicationAsync()
         {
-            var synapseAddress = Environment.GetEnvironmentVariable("SYNAPSE_INTEROP_SYNADDR");
-            if (string.IsNullOrWhiteSpace(synapseAddress)) synapseAddress = "localhost";
-
             var replication = new SynapseReplication();
             replication.ClientName = "NetCoreDevWorker";
             replication.ServerName += Replication_ServerName;
