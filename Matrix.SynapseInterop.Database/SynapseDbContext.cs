@@ -6,6 +6,7 @@ namespace Matrix.SynapseInterop.Database
     public class SynapseDbContext : DbContext
     {
         public DbQuery<EventJson> Events { get; set; }
+        public DbQuery<FederationStreamPosition> FederationStreamPosition { get; set; }
 
         private string _connString;
 
