@@ -53,7 +53,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public string SignJson(JObject jsonObject)
         {
-            dynamic sigs = jsonObject["signatures"];
             jsonObject.Remove("signatures");
             jsonObject.Remove("unsigned");
             var ordered = SortPropertiesAlphabetically(jsonObject);
