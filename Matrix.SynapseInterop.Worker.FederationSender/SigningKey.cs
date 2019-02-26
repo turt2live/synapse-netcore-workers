@@ -97,26 +97,5 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             return result;
         }
-
-        public static void TestSigning()
-        {
-            var key = new SigningKey("ed25519 1 YJDBA9Xnr2sVqXD9Vj7XVUnmFZcZrlw8Md7kMW+3XA1");
-            var json = @"{
-                ""content"": {
-                    ""body"": ""Here is the message content"",
-                },
-                ""event_id"": ""$0:domain"",
-                ""origin"": ""domain"",
-                ""origin_server_ts"": 1000000,
-                ""type"": ""m.room.message"",
-                ""room_id"": ""!r:domain"",
-                ""sender"": ""@u:domain"",
-                ""signatures"": {},
-                ""unsigned"": {
-                    ""age_ts"": 1000000
-                }
-            }";
-            var signOne = key.SignJson(JObject.Parse(json));
-        }
     }
 }
