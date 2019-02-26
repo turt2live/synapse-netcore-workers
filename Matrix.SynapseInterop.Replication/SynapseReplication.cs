@@ -76,7 +76,14 @@ namespace Matrix.SynapseInterop.Replication
                     result.Append(Encoding.UTF8.GetString(buf, 0, read));
                 } while (stream.DataAvailable);
 
-                ProcessCommands(result.ToString());
+                try
+                {
+                    ProcessCommands(result.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Failed to process command: {0}", ex);
+                }
             }
         }
 
@@ -147,6 +154,11 @@ namespace Matrix.SynapseInterop.Replication
         public void SubscribeStream(string streamName, string position)
         {
             SendRaw("REPLICATE " + streamName + " " + position);
+        }
+
+        public void SendFederationAck(string token)
+        {
+            SendRaw($"FEDERATION_ACK {token}");
         }
 
         public ReplicationStream<T> BindStream<T>() where T : IReplicationDataRow

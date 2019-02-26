@@ -4,7 +4,7 @@ namespace Matrix.SynapseInterop.Replication.Structures
 {
     public struct EduEvent
     {
-        public string content;
+        public JObject content;
         public string origin;
         public string destination;
         public string edu_type;

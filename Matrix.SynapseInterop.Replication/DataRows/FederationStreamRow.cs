@@ -38,7 +38,7 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                         edu_type = parsed[i].edu.edu_type,
                         destination = parsed[i].edu.destination,
                         origin = parsed[i].edu.origin,
-                        content = JsonConvert.SerializeObject(parsed[i].edu.content),
+                        content = parsed[i].edu.content,
                     };
                     string[] key = parsed[i].key.ToObject<string[]>();
                     streamRow.keyedEdus.Add(key, edu);
@@ -52,7 +52,7 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                         edu_type = parsed[i].edu_type,
                         destination = parsed[i].destination,
                         origin = parsed[i].origin,
-                        content = parsed[i].content.ToString(),
+                        content = parsed[i].content,
                     });
                 } else if (typeId == "d") // DeviceRow
                 {
