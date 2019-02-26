@@ -22,6 +22,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private Task eventsProcessing;
         private Dictionary<string, Task> destOngoingTrans;
         private Dictionary<string, Transaction> destPendingTransactions;
+        private SigningKey signingKey;
         private string serverName;
         private string connString;
         private int txnId;
@@ -39,6 +40,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             txnId = (int) (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
             connString = connectionString;
             lastEventPoke = -1;
+            signingKey = key;
         }
 
         public void OnEventUpdate(string stream_pos)
@@ -154,6 +156,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 Console.WriteLine($"WARN: more than {MAX_PDUS_PER_TRANSACTION} events behind");
                 top = events.Last().StreamOrdering;
             }
+
             Console.WriteLine($"Processing from {last} to {top}");
             var roomEvents = events.GroupBy(e => e.RoomId);
             foreach (var item in roomEvents)
@@ -192,7 +195,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     pduEv.room_id = roomEvent.RoomId;
                     pduEv.sender = roomEvent.Sender;
-                    pduEv.signatures = roomEvent.Content["signatures"];
+                    pduEv.prev_state = roomEvent.Content["prev_state"];
+                    
                     if (roomEvent.Content.ContainsKey("state_key"))
                     {
                         pduEv.state_key = (string) roomEvent.Content["state_key"];
@@ -200,6 +204,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     pduEv.type = (string)roomEvent.Content["type"];
                     pduEv.unsigned = (JObject) roomEvent.Content["unsigned"];
                     pduEv.hashes = roomEvent.Content["hashes"];
+                    
+                    pduEv.signatures = new Dictionary<string, Dictionary<string, string>>();
+                    foreach (var sigHosts in (JObject) roomEvent.Content["signatures"])
+                    {
+                        pduEv.signatures.Add(sigHosts.Key, new Dictionary<string, string>());
+                        foreach (var sigs in (JObject) sigHosts.Value)
+                        {
+                            pduEv.signatures[sigHosts.Key].Add(sigs.Key, sigs.Value.Value<string>());
+                        }
+                    }
+                    
                     //TODO: I guess we need to fetch the destinations for each event in a room, because someone may have got banned in between.
                     foreach (var host in hosts)
                     {
@@ -209,7 +224,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                 }
             }
+
+            using (var db = new SynapseDbContext(connString))
+            {
+                Console.WriteLine($"Saving position {top} to DB");
+                var streamPos = db.FederationStreamPosition.First((e) => e.Type == "events");
+                streamPos.StreamId = top;
+                db.SaveChanges();
+            }
             
+            // Still behind?
+            if (events.Count == MAX_PDUS_PER_TRANSACTION)
+            {
+                Console.WriteLine("Calling ProcessPendingEvents again because we are still behind");
+                await ProcessPendingEvents();
+            }
 
         }
 
