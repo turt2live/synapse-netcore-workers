@@ -27,7 +27,7 @@ namespace Matrix.SynapseInterop.Common.Transactions
                 _transactions[txn.Id] = txn;
             }
 
-            ICollection<Transaction<T>> buffers = LoadTransactionWithStatus(TransactionStatus.NEW);
+            ICollection<Transaction<T>> buffers = LoadTransactionsWithStatus(TransactionStatus.NEW);
             foreach (Transaction<T> txn in buffers) _transactions[txn.Id] = txn;
         }
 
@@ -56,7 +56,7 @@ namespace Matrix.SynapseInterop.Common.Transactions
         /// </summary>
         /// <param name="status">The status to look for</param>
         /// <returns>The transactions matching the criteria. May be empty.</returns>
-        protected abstract ICollection<Transaction<T>> LoadTransactionWithStatus(TransactionStatus status);
+        protected abstract ICollection<Transaction<T>> LoadTransactionsWithStatus(TransactionStatus status);
 
         /// <summary>
         /// Loads a transaction by ID. If the transaction is not found, this should return null.
