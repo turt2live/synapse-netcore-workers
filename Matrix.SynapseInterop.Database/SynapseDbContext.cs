@@ -30,7 +30,7 @@ namespace Matrix.SynapseInterop.Database
         {
             List<EventJsonSet> set = new List<EventJsonSet>();
             foreach (var ev in Events
-                .Where(e => e.StreamOrdering < fromId && e.StreamOrdering <= currentId)
+                .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
                 .Take(limit)
                 .OrderBy((e) => e.StreamOrdering).ToList())
             {
