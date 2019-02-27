@@ -100,7 +100,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
         }
         
-        private async void OnEventPositionUpdate(object sender, string stream_pos)
+        private void OnEventPositionUpdate(object sender, string stream_pos)
         {
             _transactionQueue?.OnEventUpdate(stream_pos);
         }

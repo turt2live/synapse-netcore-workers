@@ -56,7 +56,8 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                     });
                 } else if (typeId == "d") // DeviceRow
                 {
-                    streamRow.devices.Add(parsed[i].destination);
+                    string destination = parsed[i]["destination"].Value;
+                    streamRow.devices.Add(destination);
                 }
             }
             return streamRow;

@@ -13,6 +13,8 @@ namespace Matrix.SynapseInterop.Database
         public DbQuery<EventForwardExtremities> EventForwardExtremities { get; set; }
         public DbQuery<RoomMemberships> RoomMemberships { get; set; }
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
+        public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
+        public DbQuery<DeviceMaxStreamId> DeviceMaxStreamId { get; set; }
 
         private string _connString;
 

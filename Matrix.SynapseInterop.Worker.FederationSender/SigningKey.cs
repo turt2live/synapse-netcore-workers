@@ -62,16 +62,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         }
 
         // https://stackoverflow.com/a/28557035 - Ordering members.
-        public static JObject SortPropertiesAlphabetically(JObject original)
+        public static JObject SortPropertiesAlphabetically(JObject original, bool invert = false)
         {
             var result = new JObject();
-            foreach (var property in original.Properties().ToList().OrderBy(p => p.Name))
+            var enumerable = original.Properties().ToList();
+            var ordered = invert ? enumerable.OrderByDescending(p => p.Name) : enumerable.OrderBy(p => p.Name);
+            foreach (var property in ordered)
             {
                 var value = property.Value as JObject;
                 var valueArr = property.Value as JArray;
                 if (value != null)
                 {
-                    value = SortPropertiesAlphabetically(value);
+                    // XXX: Hack to make device messages work?
+                    value = SortPropertiesAlphabetically(value, property.Name == "ciphertext");
                     result.Add(property.Name, value);
                 } else if (valueArr != null)
                 {

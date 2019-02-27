@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Transactions;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.Models;
 using Matrix.SynapseInterop.Replication.Structures;
@@ -16,6 +17,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
+        private const int MAX_BACKOFF_SECS = 60*60*24;
         private FederationClient client;
         private Dictionary<string, PresenceState> userPresence;
         private Task presenceProcessing;
@@ -28,12 +30,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private int txnId;
         private int lastEventPoke;
 
+        private Dictionary<string, long> destLastDeviceMsgStreamId;
+        private Dictionary<string, long> destLastDeviceListStreamId;
+
         public TransactionQueue(string serverName, string connectionString, SigningKey key)
         {
             client = new FederationClient(serverName, key);
             userPresence = new Dictionary<string, PresenceState>();
             destOngoingTrans = new Dictionary<string, Task>();
             destPendingTransactions = new Dictionary<string, Transaction>();
+            destLastDeviceMsgStreamId = new Dictionary<string, long>();
+            destLastDeviceListStreamId = new Dictionary<string, long>();
             presenceProcessing = Task.CompletedTask;
             eventsProcessing = Task.CompletedTask;
             this.serverName = serverName;
@@ -89,6 +96,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return;
             }
             
+            // Prod device messages if we've not seen this destination before.
+            if (!destLastDeviceMsgStreamId.ContainsKey(obj.destination))
+            {
+                SendDeviceMessages(obj.destination);
+            }
+            
             Transaction transaction = getOrCreateTransactionForDest(obj.destination);
 
             transaction.edus.Add(obj);
@@ -104,7 +117,45 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public void SendDeviceMessages(string destination)
         {
-            
+            if (serverName == destination)
+            {
+                return; // Obviously.
+            }
+            // Fetch messages for destination
+            var messages = GetNewDeviceMessages(destination);
+            if (messages.Item1.Count == 0)
+            {
+                return;
+            }
+            var transaction = getOrCreateTransactionForDest(destination);
+            messages.Item1.ForEach(message =>
+            {
+                transaction.edus.Add(new EduEvent
+                {
+                    destination = destination,
+                    content = JObject.Parse(message.MessagesJson),
+                    edu_type = "m.direct_to_device",
+                    origin = serverName,
+                    StreamId = message.StreamId,
+                });
+            });
+            //TODO: Device lists
+            AttemptTransaction(destination);
+        }
+
+        private Tuple<List<DeviceFederationOutbox>> GetNewDeviceMessages(string destination)
+        {
+            long lastMsgId = destLastDeviceMsgStreamId.GetValueOrDefault(destination, 0);
+            using (var db = new SynapseDbContext(connString))
+            {
+                var res = db.DeviceMaxStreamId.FirstOrDefault();
+                var id = res?.StreamId ?? 0;
+                var messages = db.DeviceFederationOutboxes.Where(message =>
+                    message.Destination == destination && message.StreamId > lastMsgId
+                ).OrderBy(message => message.StreamId).Take(MAX_EDUS_PER_TRANSACTION).ToList();
+                return Tuple.Create(messages);
+            }
+
         }
 
         private async Task ProcessPendingPresence()
@@ -239,7 +290,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 Console.WriteLine("Calling ProcessPendingEvents again because we are still behind");
                 await ProcessPendingEvents();
             }
-
         }
 
         private void AttemptTransaction(string destination)
@@ -260,14 +310,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private async Task AttemptNewTransaction(string destination)
         {
             Transaction currentTransaction;
+            if (!destPendingTransactions.TryGetValue(destination, out currentTransaction))
+            {
+                Console.WriteLine($"No more transactions for {destination}");
+                return;
+            }
             while (true)
             {
-                if (!destPendingTransactions.TryGetValue(destination, out currentTransaction))
-                {
-                    Console.WriteLine($"No more transactions for {destination}");
-                    break;
-                }
-
                 destPendingTransactions.Remove(destination);
                 try
                 {
@@ -275,8 +324,34 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
                 catch (Exception ex)
                 {
-                    //TODO: Backoff, retry.
-                    Console.WriteLine("Transaction {0} failed: {1}", currentTransaction.transaction_id, ex);
+                    destPendingTransactions.Add(destination, currentTransaction);
+                    currentTransaction.BackoffSecs *= 2;
+                    Console.WriteLine("Transaction {0} failed: {1}. Backing off for {2}secs", currentTransaction.transaction_id, ex, currentTransaction.BackoffSecs);
+                    await Task.Delay(currentTransaction.BackoffSecs * 1000);
+                    continue;
+                }
+                
+                // Remove any device messages 
+                var deviceMsgs = currentTransaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList().ConvertAll(m => m.StreamId);
+                destLastDeviceMsgStreamId[destination] = deviceMsgs.Max();
+                if (deviceMsgs.Count != 0)
+                {
+                    using (var db = new SynapseDbContext(connString))
+                    {
+                        var msgs = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
+                        if (!msgs.Any())
+                        {
+                            Console.WriteLine("WARN: No messages to delete in outbox, despite sending messages in this txn");
+                            return;
+                        }
+                        db.DeviceFederationOutboxes.RemoveRange(msgs);
+                        db.SaveChanges();
+                    }
+                }
+                if (!destPendingTransactions.TryGetValue(destination, out currentTransaction))
+                {
+                    Console.WriteLine($"No more transactions for {destination}");
+                    break;
                 }
             }
 
@@ -373,6 +448,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     origin_server_ts = getTs(),
                     transaction_id = txnId.ToString(),
                     destination = dest,
+                    BackoffSecs = 5
                 };
                 destPendingTransactions.Add(dest, transaction);
             }
