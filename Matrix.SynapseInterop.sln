@@ -16,7 +16,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Matrix.SynapseInterop.Database", "Matrix.SynapseInterop.Database\Matrix.SynapseInterop.Database.csproj", "{D2F3DCC2-60C9-4FC0-A931-18C48FDDE339}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Matrix.SynapseInterop.Worker.AppserviceSender", "Matrix.SynapseInterop.Worker.AppserviceSender\Matrix.SynapseInterop.Worker.AppserviceSender.csproj", "{6B441938-EBC0-4AB8-A9B5-1E7CFD178A4B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Matrix.SynapseInterop.Worker.AppserviceSender", "Matrix.SynapseInterop.Worker.AppserviceSender\Matrix.SynapseInterop.Worker.AppserviceSender.csproj", "{6B441938-EBC0-4AB8-A9B5-1E7CFD178A4B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Matrix.SynapseInterop.Common", "Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj", "{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Matrix.SynapseInterop.Worker.FederationSender", "Matrix.SynapseInterop.Worker.FederationSender\Matrix.SynapseInterop.Worker.FederationSender.csproj", "{40E1B4AE-F421-4870-B978-503C52129F17}"
 EndProject
@@ -46,6 +48,10 @@ Global
 		{40E1B4AE-F421-4870-B978-503C52129F17}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{40E1B4AE-F421-4870-B978-503C52129F17}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{40E1B4AE-F421-4870-B978-503C52129F17}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
