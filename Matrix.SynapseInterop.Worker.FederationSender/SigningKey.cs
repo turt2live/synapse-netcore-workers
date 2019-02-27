@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Buffers.Text;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
+using Microsoft.EntityFrameworkCore.Internal;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 using Sodium;
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
@@ -62,19 +59,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         }
 
         // https://stackoverflow.com/a/28557035 - Ordering members.
-        public static JObject SortPropertiesAlphabetically(JObject original, bool invert = false)
+        public static JObject SortPropertiesAlphabetically(JObject original)
         {
             var result = new JObject();
-            var enumerable = original.Properties().ToList();
-            var ordered = invert ? enumerable.OrderByDescending(p => p.Name) : enumerable.OrderBy(p => p.Name);
-            foreach (var property in ordered)
+            var enumerable = original.Properties().ToList().OrderByOrdinal(p => p.Name);
+            foreach (var property in enumerable)
             {
                 var value = property.Value as JObject;
                 var valueArr = property.Value as JArray;
                 if (value != null)
                 {
-                    // XXX: Hack to make device messages work?
-                    value = SortPropertiesAlphabetically(value, property.Name == "ciphertext");
+                    value = SortPropertiesAlphabetically(value);
                     result.Add(property.Name, value);
                 } else if (valueArr != null)
                 {
