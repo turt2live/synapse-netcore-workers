@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Prometheus;
 
 namespace Matrix.SynapseInterop.Common
@@ -7,21 +8,21 @@ namespace Matrix.SynapseInterop.Common
     {
         private const string PREFIX = "synapse_netcore_worker";
 
-        static readonly Counter TransactionsSent = Prometheus.Metrics.CreateCounter(
+        static readonly Counter TransactionsSent = Metrics.CreateCounter(
             $"{PREFIX}_txns_sent",
             "Number of transactions sent",
             new CounterConfiguration
             {
-                LabelNames = new string[] { "instance", "outcome", "destination" }
+                LabelNames = new[] { "instance", "outcome", "destination" }
             }
         );
 
-        static readonly Histogram TransactionDuration = Prometheus.Metrics.CreateHistogram(
+        static readonly Histogram TransactionDuration = Metrics.CreateHistogram(
             $"{PREFIX}_txns_duration",
             "Time taken to complete a transaction",
             new HistogramConfiguration
             {
-                LabelNames = new string[] { "instance", "destination" }
+                LabelNames = new[] { "instance", "destination" }
                 
             }
         );

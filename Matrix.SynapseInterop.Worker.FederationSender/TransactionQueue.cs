@@ -146,21 +146,32 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     StreamId = message.StreamId,
                 });
             });
-            //TODO: Device lists
+            messages.Item2.ForEach(list =>
+            {
+                transaction.edus.Add(new EduEvent
+                {
+                    destination = destination,
+                    content = JObject.FromObject(list),
+                    edu_type = "m.device_list_update",
+                    origin = serverName,
+                    StreamId = list.stream_id,
+                });
+            });
             AttemptTransaction(destination);
         }
 
-        private Tuple<List<DeviceFederationOutbox>> GetNewDeviceMessages(string destination)
+        private Tuple<List<DeviceFederationOutbox>, List<DeviceContentSet>> GetNewDeviceMessages(string destination)
         {
             long lastMsgId = destLastDeviceMsgStreamId.GetValueOrDefault(destination, 0);
+            long lastListId = destLastDeviceListStreamId.GetValueOrDefault(destination, 0);
             using (var db = new SynapseDbContext(connString))
             {
-                var res = db.DeviceMaxStreamId.FirstOrDefault();
-                var id = res?.StreamId ?? 0;
                 var messages = db.DeviceFederationOutboxes.Where(message =>
                     message.Destination == destination && message.StreamId > lastMsgId
                 ).OrderBy(message => message.StreamId).Take(MAX_EDUS_PER_TRANSACTION).ToList();
-                return Tuple.Create(messages);
+
+                var resLists = db.GetNewDevicesForDestination(destination, MAX_EDUS_PER_TRANSACTION);
+                return Tuple.Create(messages, resLists);
             }
 
         }
@@ -194,7 +205,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private async Task ProcessPendingEvents()
         {
-            Console.WriteLine("Processing new PDU events..");
             List<EventJsonSet> events;
             int top = lastEventPoke;
             int last;
@@ -216,17 +226,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             Console.WriteLine($"Processing from {last} to {top}");
-            var roomEvents = events.GroupBy(e => e.RoomId);
+            // Skip any events that didn't come from us.
+            var roomEvents = events.SkipWhile(e => !IsMineId(e.Sender)).GroupBy(e => e.RoomId);
             foreach (var item in roomEvents)
             {
                 var hosts = await GetHostsInRoom(item.Key);
                 foreach (var roomEvent in item)
                 {
                     // TODO: Support send_on_bahalf_of?
-                    if (!IsMineId(roomEvent.Sender))
-                    {
-                        continue;
-                    }
 
                     IPduEvent pduEv;
                     if (roomEvent.Version <= 2)
@@ -310,8 +317,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
                 destOngoingTrans.Remove(destination);
             }
-
-            destOngoingTrans.Add(destination, AttemptNewTransaction(destination));
+            // This might race, it's okay to fail.
+            destOngoingTrans.TryAdd(destination, AttemptNewTransaction(destination));
         }
 
         private async Task AttemptNewTransaction(string destination)
@@ -343,22 +350,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                     
                     // Remove any device messages 
-                    var deviceMsgs = currentTransaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList().ConvertAll(m => m.StreamId);
-                    destLastDeviceMsgStreamId[destination] = deviceMsgs.Max();
-                    if (deviceMsgs.Count != 0)
-                    {
-                        using (var db = new SynapseDbContext(connString))
-                        {
-                            var msgs = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
-                            if (!msgs.Any())
-                            {
-                                Console.WriteLine("WARN: No messages to delete in outbox, despite sending messages in this txn");
-                                return;
-                            }
-                            db.DeviceFederationOutboxes.RemoveRange(msgs);
-                            db.SaveChanges();
-                        }
-                    }
+                    ClearDeviceMessages(currentTransaction);
                 }
                 if (!destPendingTransactions.TryGetValue(destination, out currentTransaction))
                 {
@@ -367,6 +359,50 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
             }
 
+        }
+
+        private void ClearDeviceMessages(Transaction transaction)
+        {
+            var deviceMsgs = transaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList().ConvertAll(m => m.StreamId);
+            var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList()
+                .ConvertAll(m => Tuple.Create(m.StreamId, (string)m.content["user_id"]));
+            using (var db = new SynapseDbContext(connString))
+            {
+                if (deviceMsgs.Count != 0)
+                {
+                    destLastDeviceMsgStreamId[transaction.destination] = deviceMsgs.Max();
+                    var deviceMsgEntries = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
+                    if (deviceMsgEntries.Any())
+                    {
+                        db.DeviceFederationOutboxes.RemoveRange(deviceMsgEntries);
+                        db.SaveChanges();
+                    }
+                    else
+                    {
+                        Console.WriteLine("WARN: No messages to delete in outbox, despite sending messages in this txn");
+                    }
+                }
+
+                if (deviceLists.Count == 0) return;
+
+                destLastDeviceListStreamId[transaction.destination] = deviceLists.Max(e => e.Item1);
+                var deviceListEntries = db.DeviceListsOutboundPokes
+                    .Where(m => 
+                        deviceLists.FindIndex(e => e.Item1 == m.StreamId && e.Item2 == m.UserId) >= 0);
+                if (deviceListEntries.Any())
+                {
+                    foreach (var msg in deviceListEntries)
+                    {
+                        msg.Sent = true;
+                    }
+
+                    db.SaveChanges();
+                }
+                else
+                {
+                    Console.WriteLine("WARN: No device lists to mark as sent, despite sending lists in this txn");
+                }
+            }
         }
 
         private bool IsMineId(string id)
