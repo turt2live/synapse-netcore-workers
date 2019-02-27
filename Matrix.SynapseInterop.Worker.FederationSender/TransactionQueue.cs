@@ -110,8 +110,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public void SendEdu(EduEvent ev, string key)
         {
-            // TODO: We need to only send one event at a time with the same key.
-            // but here we are ignoring it, because demo.
+            Transaction transaction = getOrCreateTransactionForDest(ev.destination);
+            var existingItem = transaction.edus.FindIndex(edu => edu.InternalKey == key);
+            if (existingItem >= 0)
+            {
+                transaction.edus.RemoveAt(existingItem);
+            }
+
+            ev.InternalKey = key;
             SendEdu(ev);
         }
 

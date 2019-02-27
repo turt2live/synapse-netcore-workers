@@ -6,6 +6,8 @@ namespace Matrix.SynapseInterop.Replication.Structures
     public struct EduEvent
     {
         [JsonIgnore]
+        public string InternalKey;
+        [JsonIgnore]
         public long StreamId;
         public JObject content;
         public string origin;
