@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Transactions;
+using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.Models;
 using Matrix.SynapseInterop.Replication.Structures;
@@ -323,35 +324,40 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             while (true)
             {
-                destPendingTransactions.Remove(destination);
-                try
+                using (WorkerMetrics.TransactionDurationTimer(destination))
                 {
-                    await client.SendTransaction(currentTransaction);
-                }
-                catch (Exception ex)
-                {
-                    destPendingTransactions.Add(destination, currentTransaction);
-                    currentTransaction.BackoffSecs *= 2;
-                    Console.WriteLine("Transaction {0} failed: {1}. Backing off for {2}secs", currentTransaction.transaction_id, ex, currentTransaction.BackoffSecs);
-                    await Task.Delay(currentTransaction.BackoffSecs * 1000);
-                    continue;
-                }
-                
-                // Remove any device messages 
-                var deviceMsgs = currentTransaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList().ConvertAll(m => m.StreamId);
-                destLastDeviceMsgStreamId[destination] = deviceMsgs.Max();
-                if (deviceMsgs.Count != 0)
-                {
-                    using (var db = new SynapseDbContext(connString))
+                    destPendingTransactions.Remove(destination);
+                    try
                     {
-                        var msgs = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
-                        if (!msgs.Any())
+                        await client.SendTransaction(currentTransaction);
+                        WorkerMetrics.IncTransactionsSent(true, destination);
+                    }
+                    catch (Exception ex)
+                    {
+                        destPendingTransactions.Add(destination, currentTransaction);
+                        currentTransaction.BackoffSecs *= 2;
+                        Console.WriteLine("Transaction {0} failed: {1}. Backing off for {2}secs", currentTransaction.transaction_id, ex, currentTransaction.BackoffSecs);
+                        WorkerMetrics.IncTransactionsSent(false, destination);
+                        await Task.Delay(currentTransaction.BackoffSecs * 1000);
+                        continue;
+                    }
+                    
+                    // Remove any device messages 
+                    var deviceMsgs = currentTransaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList().ConvertAll(m => m.StreamId);
+                    destLastDeviceMsgStreamId[destination] = deviceMsgs.Max();
+                    if (deviceMsgs.Count != 0)
+                    {
+                        using (var db = new SynapseDbContext(connString))
                         {
-                            Console.WriteLine("WARN: No messages to delete in outbox, despite sending messages in this txn");
-                            return;
+                            var msgs = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
+                            if (!msgs.Any())
+                            {
+                                Console.WriteLine("WARN: No messages to delete in outbox, despite sending messages in this txn");
+                                return;
+                            }
+                            db.DeviceFederationOutboxes.RemoveRange(msgs);
+                            db.SaveChanges();
                         }
-                        db.DeviceFederationOutboxes.RemoveRange(msgs);
-                        db.SaveChanges();
                     }
                 }
                 if (!destPendingTransactions.TryGetValue(destination, out currentTransaction))
