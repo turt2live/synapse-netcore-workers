@@ -24,6 +24,8 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
                 .AddCommandLine(args)
                 .Build();
 
+            AppserviceDb.ConnectionString = _config.GetConnectionString("appserviceWorker");
+
             var kestrelConfig = _config.GetSection("Kestrel");
             var host = new WebHostBuilder()
                 .UseKestrel(options => options.Listen(IPAddress.Parse(kestrelConfig.GetValue<string>("bindHost")), kestrelConfig.GetValue<int>("bindPort")))
