@@ -6,14 +6,20 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
 {
     public sealed class AppserviceAdminRouting : KestrelRouting
     {
-        public AppserviceAdminRouting(RoutableOptions<KestrelRoutableContext, KestrelRoutableRequest, KestrelRoutableResponse> options) : base(options)
+        public AppserviceAdminRouting(
+            RoutableOptions<KestrelRoutableContext, KestrelRoutableRequest, KestrelRoutableResponse> options
+        ) : base(options)
         {
             Add(_ => _.Get("/_matrix/admin/r0/appservices").Try(OnListAppservices));
         }
 
-        private bool OnListAppservices(KestrelRoutableContext ctx, KestrelRoutableRequest req, KestrelRoutableResponse resp)
+        private bool OnListAppservices(KestrelRoutableContext ctx,
+                                       KestrelRoutableRequest req,
+                                       KestrelRoutableResponse resp
+        )
         {
             resp.ContentType = "application/json";
+
             resp.Write(JObject.FromObject(new
             {
                 TestAppservice = new
@@ -27,13 +33,14 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
                     {
                         users = new object[]
                         {
-                            new {exclusive=true,regex="@_example.*"},
+                            new {exclusive = true, regex = "@_example.*"}
                         },
                         aliases = new object[0],
-                        rooms = new object[0],
-                    },
-                },
+                        rooms = new object[0]
+                    }
+                }
             }));
+
             return true;
         }
     }

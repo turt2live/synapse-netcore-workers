@@ -6,8 +6,6 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
     {
         internal static string ConnectionString { get; set; }
 
-        public AppserviceDb() : base(ConnectionString)
-        {
-        }
+        public AppserviceDb() : base(ConnectionString) { }
     }
 }
