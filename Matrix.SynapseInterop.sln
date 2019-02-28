@@ -10,6 +10,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B3F19939-E331-41F6-9527-D5B8A97C7487}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
+		appveyor.yml = appveyor.yml
 		LICENSE = LICENSE
 		README.md = README.md
 	EndProjectSection
@@ -18,7 +19,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Matrix.SynapseInterop.Datab
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Matrix.SynapseInterop.Worker.AppserviceSender", "Matrix.SynapseInterop.Worker.AppserviceSender\Matrix.SynapseInterop.Worker.AppserviceSender.csproj", "{6B441938-EBC0-4AB8-A9B5-1E7CFD178A4B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Matrix.SynapseInterop.Common", "Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj", "{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Matrix.SynapseInterop.Common", "Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj", "{C5FB7927-DAB7-42DC-B39D-CA60D102EBD8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
