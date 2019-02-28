@@ -9,6 +9,6 @@
         QUEUED,
 
         // The transaction has been sent to the destination. It should not be modified.
-        SENT,
+        SENT
     }
 }

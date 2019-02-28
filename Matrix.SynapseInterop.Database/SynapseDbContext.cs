@@ -5,13 +5,13 @@ namespace Matrix.SynapseInterop.Database
 {
     public class SynapseDbContext : DbContext
     {
-        public DbQuery<EventJson> Events { get; set; }
+        private readonly string _connString;
 
-        private string _connString;
+        public DbQuery<EventJson> Events { get; set; }
 
         public SynapseDbContext(string connectionString)
         {
-            this._connString = connectionString;
+            _connString = connectionString;
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

@@ -1,21 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Linq;
 using Matrix.SynapseInterop.Replication.DataRows;
 
 namespace Matrix.SynapseInterop.Replication
 {
     public class SynapseReplication
     {
+        private readonly Dictionary<string, ReplicationData>
+            _pendingBatches = new Dictionary<string, ReplicationData>();
+
+        private readonly Dictionary<Type, object>
+            _streams = new Dictionary<Type, object>(); // object is a ReplicationStream<T>. TODO: Don't do this.
+
         private TcpClient _client;
+
         private Timer _pingTimer;
-        private Dictionary<string, ReplicationData> _pendingBatches = new Dictionary<string, ReplicationData>();
-        private Dictionary<Type, object> _streams = new Dictionary<Type, object>(); // object is a ReplicationStream<T>. TODO: Don't do this.
 
         public string ClientName { get; set; }
 
@@ -38,7 +43,7 @@ namespace Matrix.SynapseInterop.Replication
             await _client.ConnectAsync(ip, port);
 
             // Name our client
-            string name = string.IsNullOrWhiteSpace(ClientName) ? "NETCORESynapseReplication" : ClientName;
+            var name = string.IsNullOrWhiteSpace(ClientName) ? "NETCORESynapseReplication" : ClientName;
             SendRaw("NAME " + name);
 
             // Start pinging 
@@ -64,11 +69,11 @@ namespace Matrix.SynapseInterop.Replication
         {
             while (_client.Connected)
             {
-                byte[] buf = new byte[1024];
+                var buf = new byte[1024];
                 var stream = _client.GetStream();
 
                 var result = new StringBuilder();
-                int read = 0;
+                var read = 0;
 
                 do
                 {
@@ -84,8 +89,7 @@ namespace Matrix.SynapseInterop.Replication
         {
             var byLine = raw.Split('\n').Where(c => !string.IsNullOrWhiteSpace(c));
 
-            foreach (string cmd in byLine)
-            {
+            foreach (var cmd in byLine)
                 if (cmd.StartsWith("SERVER "))
                 {
                     if (ServerName == null) continue;
@@ -95,14 +99,15 @@ namespace Matrix.SynapseInterop.Replication
                 {
                     if (RData == null) continue;
                     var row = cmd.Substring("RDATA ".Length);
-                    string[] rowParts = row.Split(new char[] { ' ' }, 3);
+                    var rowParts = row.Split(new[] {' '}, 3);
 
-                    string stream = rowParts[0];
-                    string position = rowParts[1];
-                    string rowData = rowParts[2];
+                    var stream = rowParts[0];
+                    var position = rowParts[1];
+                    var rowData = rowParts[2];
 
                     if (!_pendingBatches.ContainsKey(stream)) _pendingBatches.Add(stream, new ReplicationData(stream));
                     _pendingBatches[stream].AppendRow(rowData);
+
                     if (position != "batch")
                     {
                         var rdata = _pendingBatches[stream];
@@ -114,12 +119,12 @@ namespace Matrix.SynapseInterop.Replication
                 else if (cmd.StartsWith("POSITION "))
                 {
                     if (PositionUpdate == null) continue;
-                    var posParts = cmd.Substring("POSITION ".Length).Split(new char[] { ' ' }, 2);
+                    var posParts = cmd.Substring("POSITION ".Length).Split(new[] {' '}, 2);
 
-                    string stream = posParts[0];
-                    string position = posParts[1];
+                    var stream = posParts[0];
+                    var position = posParts[1];
 
-                    PositionUpdate(this, new StreamPosition { StreamName = stream, Position = position });
+                    PositionUpdate(this, new StreamPosition {StreamName = stream, Position = position});
                 }
                 else if (cmd.StartsWith("PING "))
                 {
@@ -131,7 +136,6 @@ namespace Matrix.SynapseInterop.Replication
                     if (Error == null) continue;
                     Error(this, cmd.Substring("ERROR ".Length));
                 }
-            }
         }
 
         public void SendRaw(string command)
@@ -139,7 +143,7 @@ namespace Matrix.SynapseInterop.Replication
             _client.Client.Send(Encoding.UTF8.GetBytes(command + "\n"));
         }
 
-        private void SendPing(Object context)
+        private void SendPing(object context)
         {
             SendRaw("PING " + DateTime.Now.ToBinary());
         }
@@ -152,14 +156,14 @@ namespace Matrix.SynapseInterop.Replication
         public ReplicationStream<T> BindStream<T>() where T : IReplicationDataRow
         {
             if (!_streams.ContainsKey(typeof(T))) ResumeStream<T>(StreamPosition.LATEST);
-            return (ReplicationStream<T>)_streams[typeof(T)];
+            return (ReplicationStream<T>) _streams[typeof(T)];
         }
 
         public ReplicationStream<T> ResumeStream<T>(string fromPosition) where T : IReplicationDataRow
         {
             if (_streams.ContainsKey(typeof(T))) throw new ArgumentException("A stream has already been started");
             _streams.Add(typeof(T), new ReplicationStream<T>(this, fromPosition));
-            return (ReplicationStream<T>)_streams[typeof(T)];
+            return (ReplicationStream<T>) _streams[typeof(T)];
         }
     }
 }

@@ -9,6 +9,7 @@ init:
   - cmd: git config --global core.autocrlf true
 install:
   # Install repo specific stuff here
+  - cmd: choco install resharper-clt
 before_build:
   # Display .NET Core version
   - cmd: dotnet --version
@@ -17,8 +18,11 @@ before_build:
 build_script:
   # output will be in ./{proj}/bin/debug/netcoreapp1.1/publish
   - cmd: dotnet publish ./Matrix.SynapseInterop.sln
+# Source: https://gist.github.com/IlyaFinkelshteyn/ec95c1cc06b304db1972659cabd22ff8
 after_build:
-  # For once the build has completed
+  - cmd: InspectCode.exe -o=resharper-clt-output.xml ./Matrix.SynapseInterop.sln
+  - ps: $result = [xml](Get-Content ./resharper-clt-output.xml)
+  - ps: $result.Report.Issues.ChildNodes | ForEach-Object {$project = $_.Name; $_.ChildNodes | ForEach-Object {Add-AppveyorCompilationMessage -Message $_.Message -Line $_.Line -FileName $_.File -ProjectName $project}}
 # TODO: Actual output executables
 #artifacts:
 # - path: '\src\bin\Debug\netcoreapp1.1\publish'

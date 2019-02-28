@@ -1,6 +1,6 @@
-﻿using Matrix.SynapseInterop.Replication.DataRows;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Matrix.SynapseInterop.Replication.DataRows;
 
 namespace Matrix.SynapseInterop.Replication
 {
@@ -26,25 +26,24 @@ namespace Matrix.SynapseInterop.Replication
 
     public class ReplicationStream<T> where T : IReplicationDataRow
     {
-        private static Dictionary<Type, string> DATA_ROW_STREAM_NAMES = new Dictionary<Type, string>()
+        private static readonly Dictionary<Type, string> DATA_ROW_STREAM_NAMES = new Dictionary<Type, string>
         {
-            { typeof(EventStreamRow), ReplicationStreamName.EVENTS },
+            {typeof(EventStreamRow), ReplicationStreamName.EVENTS}
         };
 
-        private static Dictionary<string, Func<string, IReplicationDataRow>> DATA_ROW_FACTORIES = new Dictionary<string, Func<string, IReplicationDataRow>>()
-        {
-            {  ReplicationStreamName.EVENTS, (raw) => EventStreamRow.FromRaw(raw) },
-        };
-
-        public event EventHandler<T> DataRow;
-        public event EventHandler<string> PositionUpdate;
+        private static readonly Dictionary<string, Func<string, IReplicationDataRow>> DATA_ROW_FACTORIES =
+            new Dictionary<string, Func<string, IReplicationDataRow>>
+            {
+                {ReplicationStreamName.EVENTS, raw => EventStreamRow.FromRaw(raw)}
+            };
 
         private string _position;
 
-        public string StreamName { get; private set; }
+        public string StreamName { get; }
+
         public string CurrentPosition
         {
-            get { return _position; }
+            get => _position;
             private set
             {
                 _position = value;
@@ -63,20 +62,24 @@ namespace Matrix.SynapseInterop.Replication
             replicationHost.SubscribeStream(StreamName, resumeFrom);
         }
 
+        public event EventHandler<T> DataRow;
+        public event EventHandler<string> PositionUpdate;
+
         private void ReplicationHost_PositionUpdate(object sender, StreamPosition e)
         {
-            if (e.StreamName == this.StreamName) this.CurrentPosition = e.Position;
+            if (e.StreamName == StreamName) CurrentPosition = e.Position;
         }
 
         private void ReplicationHost_RData(object sender, ReplicationData e)
         {
-            if (e.SteamName != this.StreamName) return;
+            if (e.SteamName != StreamName) return;
 
-            this.CurrentPosition = e.Position;
+            CurrentPosition = e.Position;
+
             foreach (var row in e.RawRows)
             {
-                var dataRow = DATA_ROW_FACTORIES[this.StreamName](row);
-                DataRow?.Invoke(this, (T)dataRow);
+                var dataRow = DATA_ROW_FACTORIES[StreamName](row);
+                DataRow?.Invoke(this, (T) dataRow);
             }
         }
     }
