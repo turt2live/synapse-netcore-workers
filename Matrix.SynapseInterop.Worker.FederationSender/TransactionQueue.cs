@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Transactions;
 using Matrix.SynapseInterop.Common;
@@ -375,6 +377,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         WorkerMetrics.IncTransactionsSent(true, destination);
                         WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                         WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
+                    }
+                    catch (HttpRequestException ex)
+                    {
+                        if (ex.InnerException is SocketException)
+                        {
+                            // Really backoff a socket exception hard, because the host probably doesn't exist
+                            currentTransaction.BackoffSecs *= 10;
+                        }
+                        throw;
                     }
                     catch (Exception ex)
                     {
