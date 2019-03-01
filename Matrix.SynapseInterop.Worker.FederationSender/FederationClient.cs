@@ -106,6 +106,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // TODO: Should we drop well known for other reasons?
 
             string error = await resp.Content.ReadAsStringAsync();
+
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
             {
                 // Possible key fail, show some debug info for people to debug.
@@ -128,7 +129,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     // ignored
                 }
-            })
+            }
+
             throw new Exception(error);
         }
 
