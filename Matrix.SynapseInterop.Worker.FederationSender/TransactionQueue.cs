@@ -9,6 +9,7 @@ using Matrix.SynapseInterop.Database.Models;
 using Matrix.SynapseInterop.Replication.Structures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -34,9 +35,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
 
-        public TransactionQueue(string serverName, string connectionString, SigningKey key)
+        public TransactionQueue(string serverName, string connectionString, SigningKey key, IConfigurationSection clientConfig)
         {
-            _client = new FederationClient(serverName, key);
+            _client = new FederationClient(serverName, key, clientConfig);
             _userPresence = new Dictionary<string, PresenceState>();
             _destOngoingTrans = new Dictionary<string, Task>();
             _destPendingTransactions = new Dictionary<string, Transaction>();

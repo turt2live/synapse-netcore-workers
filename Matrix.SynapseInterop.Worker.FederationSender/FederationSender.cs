@@ -112,7 +112,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private void Replication_ServerName(object sender, string serverName)
         {
             Console.WriteLine("Server name: " + serverName);
-            _transactionQueue = new TransactionQueue(serverName, connectionString, key);
+            _transactionQueue = new TransactionQueue(serverName, connectionString, key, _config.GetSection("Federation"));
         }
 
         private void UpdateToken(int token)
