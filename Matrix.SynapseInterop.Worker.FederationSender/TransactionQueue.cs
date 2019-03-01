@@ -560,7 +560,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     origin_server_ts = GetTs(),
                     transaction_id = _txnId.ToString(),
                     destination = dest,
-                    BackoffSecs = 5
+                    BackoffSecs = 2
                 };
 
                 _destPendingTransactions.Add(dest, transaction);
