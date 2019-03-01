@@ -43,12 +43,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             key = SigningKey.ReadFromFile(synapseConfig.GetValue<string>("signingKeyPath"));
             connectionString = _config.GetConnectionString("synapse");
             _presenceEnabled = synapseConfig.GetValue("presenceEnabled", true);
-            await _synapseReplication.Connect(synapseConfig.GetValue<string>("replicationHost"), synapseConfig.GetValue<int>("replicationPort"));
-            
+
+            await _synapseReplication.Connect(synapseConfig.GetValue<string>("replicationHost"),
+                                              synapseConfig.GetValue<int>("replicationPort"));
+
             _fedStream = _synapseReplication.BindStream<FederationStreamRow>();
             _fedStream.DataRow += OnFederationRow;
             _eventStream = _synapseReplication.BindStream<EventStreamRow>();
-            _eventStream.PositionUpdate += OnEventPositionUpdate;
+            _eventStream.PositionUpdate /**/ += OnEventPositionUpdate;
             _stream_position = await GetFederationPos("federation");
         }
 
@@ -61,12 +63,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return res?.StreamId ?? -1;
             }
         }
-        
+
         private void UpdateFederationPos(string type, int id)
         {
             using (var db = new SynapseDbContext(connectionString))
             {
                 var res = db.FederationStreamPosition.SingleOrDefault(r => r.Type == type);
+
                 if (res != null)
                 {
                     res.StreamId = id;
@@ -83,14 +86,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     _transactionQueue.SendPresence(e.presence);
                 }
+
                 e.edus.ForEach(_transactionQueue.SendEdu);
+
                 foreach (var keyVal in e.keyedEdus)
                 {
-                    _transactionQueue.SendEdu(
-                        keyVal.Value,
-                        keyVal.Key.Join(":")
-                    );
+                    _transactionQueue.SendEdu(keyVal.Value,
+                                              keyVal.Key.Join(":"));
                 }
+
                 e.devices.ForEach(_transactionQueue.SendDeviceMessages);
                 UpdateToken(int.Parse(_fedStream.CurrentPosition));
             }
@@ -99,7 +103,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 Console.WriteLine("Failed to handle transaction, got: {0}", ex);
             }
         }
-        
+
         private void OnEventPositionUpdate(object sender, string stream_pos)
         {
             _transactionQueue?.OnEventUpdate(stream_pos);
@@ -114,10 +118,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private void UpdateToken(int token)
         {
             _stream_position = token;
+
             if (_last_ack >= _stream_position)
             {
                 return;
             }
+
             UpdateFederationPos("federation", _stream_position);
             _synapseReplication.SendFederationAck(_stream_position.ToString());
             _last_ack = token;
@@ -126,9 +132,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private void ProcessEventQueueLoop()
         {
             while (true) // This will be broken out of at some point.
-            {
-                
-            }
+            { }
         }
     }
 }

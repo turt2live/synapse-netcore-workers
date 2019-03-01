@@ -1,23 +1,23 @@
-﻿using Matrix.SynapseInterop.Database;
+﻿using System;
+using System.Linq;
+using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Replication;
 using Matrix.SynapseInterop.Replication.DataRows;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Linq;
 
 namespace Matrix.SynapseInterop.Worker.DevWorker
 {
-    class Program
+    internal class Program
     {
         private static IConfiguration _config;
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             _config = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.default.json", true, true)
-                .AddEnvironmentVariables()
-                .AddCommandLine(args)
-                .Build();
+                     .AddJsonFile("appsettings.default.json", true, true)
+                     .AddEnvironmentVariables()
+                     .AddCommandLine(args)
+                     .Build();
 
             StartReplicationAsync();
 
@@ -31,7 +31,9 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
             replication.ServerName += Replication_ServerName;
 
             var synapseConfig = _config.GetSection("Synapse");
-            await replication.Connect(synapseConfig.GetValue<string>("replicationHost"), synapseConfig.GetValue<int>("replicationPort"));
+
+            await replication.Connect(synapseConfig.GetValue<string>("replicationHost"),
+                                      synapseConfig.GetValue<int>("replicationPort"));
 
             var stream = replication.BindStream<EventStreamRow>();
             stream.DataRow += Stream_DataRow;
@@ -43,14 +45,11 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
             {
                 Console.WriteLine("Received event {0} ({1}) in {2}", e.EventId, e.EventType, e.RoomId);
                 var ev = db.EventsJson.SingleOrDefault(e2 => e2.RoomId == e.RoomId && e2.EventId == e.EventId);
+
                 if (ev != null)
-                {
                     Console.WriteLine(ev.Json);
-                }
                 else
-                {
                     Console.WriteLine("EVENT NOT FOUND");
-                }
             }
         }
 

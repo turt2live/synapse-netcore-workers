@@ -4,15 +4,15 @@ namespace Matrix.SynapseInterop.Replication
 {
     public class ReplicationData
     {
-        public string SteamName { get; private set; }
-        public string Position { get; internal set; }
+        private readonly List<string> _rawRows = new List<string>();
 
-        private List<string> _rawRows = new List<string>();
-        public ICollection<string> RawRows { get { return _rawRows.AsReadOnly(); } }
+        public string SteamName { get; }
+        public string Position { get; internal set; }
+        public ICollection<string> RawRows => _rawRows.AsReadOnly();
 
         internal ReplicationData(string streamName)
         {
-            this.SteamName = streamName;
+            SteamName = streamName;
         }
 
         internal void AppendRow(string rawRow)

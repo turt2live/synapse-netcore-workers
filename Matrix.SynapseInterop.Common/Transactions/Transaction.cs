@@ -5,11 +5,11 @@ namespace Matrix.SynapseInterop.Common.Transactions
 {
     public class Transaction<T> where T : class
     {
-        private List<T> _elements = new List<T>();
+        private readonly List<T> _elements = new List<T>();
 
-        public ICollection<T> Elements { get => _elements.AsReadOnly(); }
+        public ICollection<T> Elements => _elements.AsReadOnly();
 
-        public string Id { get; private set; }
+        public string Id { get; }
 
         public TransactionStatus Status { get; internal set; }
 
@@ -17,15 +17,15 @@ namespace Matrix.SynapseInterop.Common.Transactions
 
         public Transaction(string id, ICollection<T> items)
         {
-            this.Id = id;
-            this.AddItems(items);
+            Id = id;
+            AddItems(items);
         }
 
         internal void AddItems(ICollection<T> items)
         {
             if (Status != TransactionStatus.NEW)
                 throw new InvalidOperationException("Cannot modify a transaction which is not new");
-            
+
             _elements.AddRange(items);
         }
     }

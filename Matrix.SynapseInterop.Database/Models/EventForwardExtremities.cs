@@ -10,6 +10,5 @@ namespace Matrix.SynapseInterop.Database.Models
         
         [Column("event_id")]
         public string EventId { get; set; }
-
     }
 }

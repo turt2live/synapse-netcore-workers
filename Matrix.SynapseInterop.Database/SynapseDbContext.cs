@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database.Models;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
@@ -10,21 +11,21 @@ namespace Matrix.SynapseInterop.Database
     public class SynapseDbContext : DbContext
     {
         public DbQuery<EventJson> EventsJson { get; set; }
-        public DbQuery<Event> Events { get; set; }
-        public DbQuery<EventForwardExtremities> EventForwardExtremities { get; set; }
+        private DbQuery<Event> Events { get; set; }
+        
         public DbQuery<RoomMemberships> RoomMemberships { get; set; }
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
         public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
-        public DbQuery<DeviceMaxStreamId> DeviceMaxStreamId { get; set; }
-        public DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
-        public DbQuery<Devices> Devices { get; set; }
+        
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
-
-        private string _connString;
+        private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
+        private DbQuery<Devices> Devices { get; set; }
+        
+        private readonly string _connString;
 
         public SynapseDbContext(string connectionString)
         {
-            this._connString = connectionString;
+            _connString = connectionString;
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -34,49 +35,61 @@ namespace Matrix.SynapseInterop.Database
 
         public List<DeviceContentSet> GetNewDevicesForDestination(string destination, int limit)
         {
-            List<DeviceContentSet> set = new List<DeviceContentSet>();
-            foreach (var devicePoke in DeviceListsOutboundPokes
-                .Where(poke => poke.Destination == destination && poke.Sent == false)
-                .Take(limit)
-                .OrderBy(poke => poke.StreamId).ToList())
+            using (WorkerMetrics.DbCallTimer("GetNewDevicesForDestination"))
             {
-                DeviceContentSet contentSet = new DeviceContentSet
+                List<DeviceContentSet> set = new List<DeviceContentSet>();
+
+                foreach (var devicePoke in DeviceListsOutboundPokes
+                                          .Where(poke => poke.Destination == destination && poke.Sent == false)
+                                          .Take(limit)
+                                          .OrderBy(poke => poke.StreamId).ToList())
                 {
-                    device_id = devicePoke.DeviceId,
-                    stream_id = devicePoke.StreamId,
-                    user_id = devicePoke.UserId,
-                    deleted = false,
-                };
-                var json = E2EDeviceKeysJson
-                    .SingleOrDefault(devKeys => devKeys.DeviceId == devicePoke.DeviceId && devKeys.UserId == devicePoke.UserId);
-                contentSet.keys = JObject.Parse(json.KeyJson);
-                contentSet.device_display_name = Devices.SingleOrDefault(dev =>
-                    dev.UserId == devicePoke.UserId && dev.DeviceId == devicePoke.DeviceId)
-                    ?.DisplayName;
-                set.Add(contentSet);
+                    DeviceContentSet contentSet = new DeviceContentSet
+                    {
+                        device_id = devicePoke.DeviceId,
+                        stream_id = devicePoke.StreamId,
+                        user_id = devicePoke.UserId,
+                        deleted = false,
+                    };
+
+                    var json = E2EDeviceKeysJson
+                       .SingleOrDefault(devKeys => devKeys.DeviceId == devicePoke.DeviceId &&
+                                                   devKeys.UserId == devicePoke.UserId);
+
+                    if (json != null) contentSet.keys = JObject.Parse(json.KeyJson);
+
+                    contentSet.device_display_name = Devices.SingleOrDefault(dev =>
+                                                                                 dev.UserId == devicePoke.UserId &&
+                                                                                 dev.DeviceId == devicePoke.DeviceId)
+                                                           ?.DisplayName;
+
+                    set.Add(contentSet);
+                }
+
+                return set;
             }
-            return set;
         }
 
         public List<EventJsonSet> GetAllNewEventsStream(int fromId, int currentId, int limit)
         {
-            List<EventJsonSet> set = new List<EventJsonSet>();
-            foreach (var ev in Events
-                .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
-                .Take(limit)
-                .OrderBy((e) => e.StreamOrdering).ToList())
+            using (WorkerMetrics.DbCallTimer("GetAllNewEventsStream"))
             {
-                var js = EventsJson.SingleOrDefault(e => e.EventId == ev.EventId);
-                if (js != null)
-                    set.Add(
-                        new EventJsonSet(
-                            ev,
-                            js.Json,
-                            js.FormatVersion
-                        )
-                    );
+                List<EventJsonSet> set = new List<EventJsonSet>();
+
+                foreach (var ev in Events
+                                  .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
+                                  .Take(limit)
+                                  .OrderBy((e) => e.StreamOrdering).ToList())
+                {
+                    var js = EventsJson.SingleOrDefault(e => e.EventId == ev.EventId);
+
+                    if (js != null)
+                        set.Add(new EventJsonSet(ev,
+                                                 js.Json,
+                                                 js.FormatVersion));
+                }
+                return set;
             }
-            return set;
         }
     }
 }

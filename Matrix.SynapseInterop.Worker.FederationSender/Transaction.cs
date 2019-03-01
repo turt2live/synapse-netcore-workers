@@ -10,12 +10,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         [JsonIgnore]
         public int BackoffSecs;
+
         public string transaction_id;
         public string origin;
         public string destination;
         public long origin_server_ts;
-        [JsonProperty( NullValueHandling = NullValueHandling.Ignore )]
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string[] previous_ids; // Not required.
+
         public List<EduEvent> edus;
         public List<IPduEvent> pdus; // Not required.
     }
@@ -27,22 +30,28 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         string origin { get; set; }
         long origin_server_ts { get; set; }
         string type { get; set; }
-        [JsonProperty( NullValueHandling = NullValueHandling.Ignore )]
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         string state_key { get; set; }
-        [JsonProperty( NullValueHandling = NullValueHandling.Ignore )]
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         string redacts { get; set; }
-        [JsonProperty( NullValueHandling = NullValueHandling.Ignore )]
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         JObject unsigned { get; set; }
+
         JObject content { get; set; }
         JToken prev_events { get; set; }
         JToken auth_events { get; set; }
-        [JsonProperty( NullValueHandling = NullValueHandling.Ignore )]
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         JToken prev_state { get; set; }
+
         long depth { get; set; }
         JToken hashes { get; set; }
         Dictionary<string, Dictionary<string, string>> signatures { get; set; }
     }
-    
+
     public class PduEventV1 : IPduEvent
     {
         public string room_id { get; set; }

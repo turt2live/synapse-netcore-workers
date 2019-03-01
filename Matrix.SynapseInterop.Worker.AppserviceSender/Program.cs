@@ -9,15 +9,12 @@ using System.Net;
 
 namespace Matrix.SynapseInterop.Worker.AppserviceSender
 {
-    class Program
+    internal class Program
     {
         private static IConfiguration _config;
-
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             Console.WriteLine("Starting appservice sender...");
-
-
             _config = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.default.json", true, true)
                 .AddEnvironmentVariables()
