@@ -72,7 +72,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public JToken prev_state { get; set; }
     }
 
-    public class PduEventV3 : IPduEvent
+    public class PduEventV2 : IPduEvent
     {
         public string room_id { get; set; }
         public string sender { get; set; }

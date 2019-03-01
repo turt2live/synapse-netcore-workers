@@ -259,16 +259,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     IPduEvent pduEv;
 
-                    if (roomEvent.Version <= 2)
+                    // NOTE: This is an event format version, not room version.
+                    if (roomEvent.Version == 1)
                     {
                         pduEv = new PduEventV1()
                         {
                             event_id = roomEvent.EventId
                         };
                     }
-                    else
+                    else // Default to latest event format version.
                     {
-                        pduEv = new PduEventV3();
+                        pduEv = new PduEventV2();
                     }
 
                     pduEv.content = roomEvent.Content["content"] as JObject;
