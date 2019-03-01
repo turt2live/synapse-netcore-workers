@@ -40,6 +40,7 @@ namespace Matrix.SynapseInterop.Replication
 
             // Form a connection
             _client = new TcpClient();
+            Console.WriteLine($"Connecting to replication stream on {ip}:{port}");
             await _client.ConnectAsync(ip, port);
 
             // Name our client
