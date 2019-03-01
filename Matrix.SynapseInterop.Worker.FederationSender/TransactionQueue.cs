@@ -482,7 +482,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (state.last_active_ts != 0)
             {
-                obj.Add("last_active_ago", now - state.last_active_ts);
+                obj.Add("last_active_ago", Math.Round(now - state.last_active_ts));
             }
 
             if (state.status_msg != null && state.state != "offline")
