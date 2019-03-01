@@ -128,11 +128,5 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _synapseReplication.SendFederationAck(_stream_position.ToString());
             _last_ack = token;
         }
-
-        private void ProcessEventQueueLoop()
-        {
-            while (true) // This will be broken out of at some point.
-            { }
-        }
     }
 }
