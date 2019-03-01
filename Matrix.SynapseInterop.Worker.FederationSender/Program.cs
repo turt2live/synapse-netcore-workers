@@ -4,6 +4,7 @@ using Matrix.SynapseInterop.Replication.DataRows;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Linq;
+using System.Threading;
 using Matrix.SynapseInterop.Common;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,8 +32,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             new FederationSender(_config).Start().Wait();
-
-            Console.ReadKey(true);
+            Thread.Sleep(-1);
         }
     }
 }
