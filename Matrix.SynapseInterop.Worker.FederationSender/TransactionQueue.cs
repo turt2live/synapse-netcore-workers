@@ -374,6 +374,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     try
                     {
                         await _client.SendTransaction(currentTransaction);
+                        WorkerMetrics.DecOngoingTransactions();
                         WorkerMetrics.IncTransactionsSent(true, destination);
                         WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                         WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
@@ -389,6 +390,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                     catch (Exception ex)
                     {
+                        WorkerMetrics.DecOngoingTransactions();
                         _destPendingTransactions.Add(destination, currentTransaction);
                         currentTransaction.BackoffSecs *= 2;
                         // Add some randomness to the backoff
@@ -413,7 +415,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
             }
 
-            WorkerMetrics.DecOngoingTransactions();
         }
 
         private void ClearDeviceMessages(Transaction transaction)
