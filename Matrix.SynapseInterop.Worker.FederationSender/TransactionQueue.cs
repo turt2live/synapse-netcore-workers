@@ -407,7 +407,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             _destPendingTransactions.Add(destination, currentTransaction);
                             currentTransaction.BackoffSecs *= 2;
                             // Add some randomness to the backoff
-                            currentTransaction.BackoffSecs = (int) Math.Ceiling(currentTransaction.BackoffSecs * random.NextDouble() + 0.5));
+                            currentTransaction.BackoffSecs = (int) Math.Ceiling(currentTransaction.BackoffSecs * random.NextDouble() + 0.5);
 
                             Console.WriteLine("Retrying txn {0} in {2}",
                                               currentTransaction.transaction_id, currentTransaction.BackoffSecs);
