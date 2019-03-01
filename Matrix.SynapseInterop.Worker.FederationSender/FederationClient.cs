@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -15,6 +18,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private SigningKey key;
         private HttpClient client;
+        private Dictionary<string, Uri> destinationUris;
         private string origin;
         private bool allowSelfSigned;
         private bool defaultToSecurePort;
@@ -31,7 +35,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public async Task SendTransaction(Transaction transaction)
         {
-            var uri = new UriBuilder(GetUrlForDestination(transaction.destination));
+            var uri = new UriBuilder(await GetUrlForDestination(transaction.destination));
             uri.Path += $"send/{transaction.transaction_id}/";
             Console.WriteLine($"[TX] PUT {uri} ");
 
@@ -50,13 +54,32 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                             "application/json");
 
             msg.Content = content;
-            var resp = await client.SendAsync(msg);
+            HttpResponseMessage resp;
+
+            try
+            {
+                resp = await client.SendAsync(msg);
+            }
+            catch (HttpRequestException ex)
+            {
+                //TODO: This is probably a little extreme.
+                Console.WriteLine($"Failed to reach {transaction.destination} {ex.Message}");
+                destinationUris.Remove(transaction.destination);
+                throw;
+            }
+
             Console.WriteLine($"[TX] Response: {resp.StatusCode} {resp.ReasonPhrase}");
 
             if (resp.IsSuccessStatusCode)
             {
                 return;
             }
+
+            if (resp.StatusCode == HttpStatusCode.NotFound)
+            {
+                destinationUris.Remove(transaction.destination);
+            }
+            // TODO: Should we drop well known for other reasons?
 
             string error = await resp.Content.ReadAsStringAsync();
             throw new Exception(error);
@@ -89,9 +112,44 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                               authHeader);
         }
 
-        private string GetUrlForDestination(string destination)
+        private async Task<string> GetUrlForDestination(string destination)
         {
-            return $"http://{destination}:8008/_matrix/federation/v1/";
+            Uri uri;
+
+            if (!destinationUris.TryGetValue(destination, out uri))
+            {
+                uri = await LookupServerUri(destination);
+                destinationUris.Add(destination, uri);
+            }
+            
+            return $"{uri}_matrix/federation/v1/";
+        }
+
+        private async Task<Uri> LookupServerUri(string destination)
+        {
+            // Try well known
+            try
+            {
+                var wellKnownJson = await client.GetStringAsync($"https://{destination}/.well-known/matrix/server");
+                var wellKnown = JObject.Parse(wellKnownJson);
+
+                if (wellKnown.ContainsKey("m.server"))
+                {
+                    destination = wellKnown["m.server"].ToObject<string>();
+                    return new Uri($"https://{destination}");
+                }
+
+                Console.WriteLine($"WARN .well-known is missing m.server");
+            }
+            catch (HttpRequestException) { }
+
+            Console.WriteLine($"WARN {destination} does not have a .well-known, using defaults");
+
+            if (Uri.TryCreate($"https://{destination}:8448", UriKind.Absolute, out var uri))
+            {
+                return uri;
+            }
+            throw new Exception($"Failed to create URI for {destination}");
         }
     }
 }
