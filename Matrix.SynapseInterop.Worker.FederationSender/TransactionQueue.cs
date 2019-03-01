@@ -355,7 +355,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             Transaction currentTransaction;
             WorkerMetrics.IncOngoingTransactions();
-
+            Random random = new Random();
             if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
             {
                 Console.WriteLine($"No more transactions for {destination}");
@@ -379,9 +379,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     {
                         _destPendingTransactions.Add(destination, currentTransaction);
                         currentTransaction.BackoffSecs *= 2;
+                        // Add some randomness to the backoff
+                        currentTransaction.BackoffSecs += random.Next(0, 15);
 
-                        Console.WriteLine("Transaction {0} failed: {1}. Backing off for {2}secs",
-                                          currentTransaction.transaction_id, ex, currentTransaction.BackoffSecs);
+                        Console.WriteLine("Transaction {0} {1} failed: {2}. Backing off for {3}secs",
+                                          currentTransaction.transaction_id, destination, ex, currentTransaction.BackoffSecs);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
                         await Task.Delay(Math.Min(currentTransaction.BackoffSecs * 1000, MAX_BACKOFF_SECS));
