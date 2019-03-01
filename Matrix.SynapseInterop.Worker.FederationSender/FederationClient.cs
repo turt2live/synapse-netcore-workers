@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -26,11 +25,36 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public FederationClient(string serverName, SigningKey key, IConfigurationSection config)
         {
             origin = serverName;
-            client = new HttpClient();
+
+            client = new HttpClient( new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
+            });
+
             this.key = key;
+            destinationUris = new Dictionary<string, Uri>();
             allowSelfSigned = config.GetValue<bool>("allowSelfSigned");
             defaultToSecurePort = config.GetValue<bool>("defaultToSecurePort");
         }
+
+        private bool ServerCertificateValidationCallback(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslpolicyerrors)
+        {
+            if (sslpolicyerrors.HasFlag(SslPolicyErrors.None))
+            {
+                return true;
+            }
+
+            if (
+                sslpolicyerrors.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch) &&
+                sslpolicyerrors.HasFlag(SslPolicyErrors.RemoteCertificateNotAvailable) &&
+                allowSelfSigned)
+            {
+                // XXX: Is this good enough to be considered self signed?
+                // If self signed, then allow.
+                return true;
+            }
+
+            return false;
         }
 
         public async Task SendTransaction(Transaction transaction)
