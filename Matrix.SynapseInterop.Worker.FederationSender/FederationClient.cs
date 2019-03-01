@@ -169,10 +169,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             Console.WriteLine($"WARN {destination} does not have a .well-known, using defaults");
 
-            if (Uri.TryCreate($"https://{destination}:8448", UriKind.Absolute, out var uri))
+            if (Uri.TryCreate(defaultToSecurePort ? $"https://{destination}:8448" : $"http://{destination}:8008",
+                              UriKind.Absolute, 
+                              out var uri)
+            )
             {
                 return uri;
             }
+
             throw new Exception($"Failed to create URI for {destination}");
         }
     }
