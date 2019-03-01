@@ -386,22 +386,35 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             // Really backoff a socket exception hard, because the host probably doesn't exist
                             currentTransaction.BackoffSecs *= 10;
                         }
+
                         throw;
                     }
                     catch (Exception ex)
                     {
-                        WorkerMetrics.DecOngoingTransactions();
-                        _destPendingTransactions.Add(destination, currentTransaction);
-                        currentTransaction.BackoffSecs *= 2;
-                        // Add some randomness to the backoff
-                        currentTransaction.BackoffSecs += random.Next(0, 15);
+                        // XXX: Let's not retry presence.
+                        bool retry = currentTransaction.pdus.Count > 0 ||
+                                     !currentTransaction.edus.TrueForAll(ev => ev.edu_type == "m.presence");
 
-                        Console.WriteLine("Transaction {0} {1} failed: {2}. Backing off for {3}secs",
-                                          currentTransaction.transaction_id, destination, ex, currentTransaction.BackoffSecs);
+                        WorkerMetrics.DecOngoingTransactions();
+
+                        Console.WriteLine("Transaction {0} {1} failed: {2}",
+                                          currentTransaction.transaction_id, destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
-                        await Task.Delay(Math.Min(currentTransaction.BackoffSecs * 1000, MAX_BACKOFF_SECS));
-                        continue;
+
+                        if (retry)
+                        {
+                            _destPendingTransactions.Add(destination, currentTransaction);
+                            currentTransaction.BackoffSecs *= 2;
+                            // Add some randomness to the backoff
+                            currentTransaction.BackoffSecs = (int) Math.Ceiling(currentTransaction.BackoffSecs * random.NextDouble() + 0.5));
+
+                            Console.WriteLine("Retrying txn {0} in {2}",
+                                              currentTransaction.transaction_id, currentTransaction.BackoffSecs);
+
+                            await Task.Delay(Math.Min(currentTransaction.BackoffSecs * 1000, MAX_BACKOFF_SECS));
+                            continue;
+                        }
                     }
 
                     // Remove any device messages 
