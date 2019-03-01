@@ -357,7 +357,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private async Task AttemptNewTransaction(string destination)
         {
             Transaction currentTransaction;
-            WorkerMetrics.IncOngoingTransactions();
             Random random = new Random();
             if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
             {
@@ -367,6 +366,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             while (true)
             {
+                WorkerMetrics.IncOngoingTransactions();
                 using (WorkerMetrics.TransactionDurationTimer(destination))
                 {
                     _destPendingTransactions.Remove(destination);
