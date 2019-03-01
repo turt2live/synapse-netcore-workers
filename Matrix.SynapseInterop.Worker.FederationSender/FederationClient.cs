@@ -106,6 +106,29 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // TODO: Should we drop well known for other reasons?
 
             string error = await resp.Content.ReadAsStringAsync();
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                // Possible key fail, show some debug info for people to debug.
+                try
+                {
+                    JObject err = JObject.Parse(error);
+                    string errCode = (string) err["errcode"];
+                    string errorString = (string) err["error"];
+
+                    if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
+                    {
+                        Console.WriteLine("Got invalid signature, debug info:");
+
+                        Console.WriteLine("Auth: {0}\nBody: ${1}",
+                                          msg.Headers.Authorization.Parameter,
+                                          body.ToString(Formatting.Indented));
+                    }
+                }
+                catch
+                {
+                    // ignored
+                }
+            })
             throw new Exception(error);
         }
 
