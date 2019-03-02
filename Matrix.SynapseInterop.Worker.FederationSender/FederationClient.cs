@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -92,10 +93,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             msg.Content = content;
             HttpResponseMessage resp;
+            var sw = new Stopwatch();
 
             try
             {
-                Console.WriteLine($"[TX] {transaction.destination} PUT {uri} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
+                Console.WriteLine($"[TX] {transaction.destination} PUT {uri} Host={msg.Headers.Host} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
+                sw.Start();
                 resp = await client.SendAsync(msg);
             }
             catch (HttpRequestException ex)
@@ -105,8 +108,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 destinationUris.Remove(transaction.destination);
                 throw;
             }
-
-            Console.WriteLine($"[TX] {transaction.destination} Response: {resp.StatusCode} {resp.ReasonPhrase}");
+            finally
+            {
+                sw.Stop();
+            }
+            
+            Console.WriteLine($"[TX] {transaction.destination} Response: {resp.StatusCode} {sw.ElapsedMilliseconds}ms");
 
             if (resp.IsSuccessStatusCode)
             {
