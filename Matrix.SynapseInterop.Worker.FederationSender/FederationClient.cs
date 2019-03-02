@@ -81,7 +81,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             try
             {    
-                Console.WriteLine($"[TX] PUT {uri} PDUs=${transaction.pdus.Count} EDUs={transaction.edus.Count}");
+                Console.WriteLine($"[TX] PUT {uri} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
                 resp = await client.SendAsync(msg);
             }
             catch (HttpRequestException ex)
