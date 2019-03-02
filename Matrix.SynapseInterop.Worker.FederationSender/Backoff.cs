@@ -78,6 +78,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     backoff.delayFor += NormalBackoff * multiplier;
                 }
             }
+            else
+            {
+                // Eh, it's a error.
+                backoff.delayFor += NormalBackoff * multiplier;
+            }
 
             backoff.delayFor = TimeSpan.FromMilliseconds(Math.Min(MAX_MILLISECONDS, backoff.delayFor.TotalMilliseconds));
             
