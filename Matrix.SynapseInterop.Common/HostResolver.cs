@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using DnsClient;
+using DnsClient.Protocol;
 using Newtonsoft.Json.Linq;
 
 namespace Matrix.SynapseInterop.Common
@@ -19,9 +20,9 @@ namespace Matrix.SynapseInterop.Common
         private readonly string _host;
         public DateTime LastAccessed;
 
-        private ServiceHostEntry[] _entries;
+        private SrvRecord[] _entries;
 
-        public HostRecord(Uri uri, ServiceHostEntry[] entries, string host)
+        public HostRecord(Uri uri, SrvRecord[] entries, string host)
         {
             _resolvedUri = uri;
             LastAccessed = DateTime.Now;
@@ -96,12 +97,12 @@ namespace Matrix.SynapseInterop.Common
             return host;
         }
 
-        private async Task<Tuple<Uri, ServiceHostEntry[]>> ResolveHost(string destination)
+        private async Task<Tuple<Uri, SrvRecord[]>> ResolveHost(string destination)
         {
             // https://matrix.org/docs/spec/server_server/r0.1.0.html#resolving-server-names
             if (TryHandleBasicHost(destination, out var basicHost))
             {
-                return Tuple.Create<Uri, ServiceHostEntry[]>(basicHost, null);
+                return Tuple.Create<Uri, SrvRecord[]>(basicHost, null);
             }
 
             var rawUri = CreateHostUri(destination);
@@ -125,7 +126,7 @@ namespace Matrix.SynapseInterop.Common
 
                     if (TryHandleBasicHost(wellKnownHost, out var wellKnownBasicHost))
                     {
-                        return Tuple.Create<Uri, ServiceHostEntry[]>(wellKnownBasicHost, null);
+                        return Tuple.Create<Uri, SrvRecord[]>(wellKnownBasicHost, null);
                     }
 
                     // Well-known is valid but wasn't "basic", resolve it's DNS
@@ -138,19 +139,20 @@ namespace Matrix.SynapseInterop.Common
             }
 
             // Do the DNS
-            var dnsRes = await _lookupClient.ResolveServiceAsync(rawUri.Host, "matrix", ProtocolType.Tcp);
+            var result = await _lookupClient
+               .QueryAsync($"_matrix._tcp.{rawUri.Host}", QueryType.SRV);
 
-            if (dnsRes.Length == 0)
+            var records = result.Answers.Where(r => r is SrvRecord).Cast<SrvRecord>().ToArray();
+
+            if (result.HasError || records.Length == 0)
             {
                 // No records, attempt to resolve the host directly.
-                return Tuple.Create<Uri, ServiceHostEntry[]>(rawUri, null);
+                return Tuple.Create<Uri, SrvRecord[]>(rawUri, null);
             }
 
-            var host = dnsRes[0].HostName ?? rawUri.Host;
-            
-            rawUri = CreateHostUri($"{host}:{dnsRes[0].Port}");
+            rawUri = CreateHostUri($"{records[0].Target.Value}:{records[0].Port}");
 
-            return Tuple.Create(rawUri, dnsRes);
+            return Tuple.Create(rawUri, records);
         }
 
         private bool TryHandleBasicHost(string destination, out Uri uri)
