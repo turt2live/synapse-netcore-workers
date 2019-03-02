@@ -28,13 +28,15 @@ namespace Matrix.SynapseInterop.Replication
     {
         private static readonly Dictionary<Type, string> DATA_ROW_STREAM_NAMES = new Dictionary<Type, string>
         {
-            {typeof(EventStreamRow), ReplicationStreamName.EVENTS}
+            {typeof(EventStreamRow), ReplicationStreamName.EVENTS},
+            {typeof(FederationStreamRow), ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE},
         };
 
-        private static readonly Dictionary<string, Func<string, IReplicationDataRow>> DATA_ROW_FACTORIES =
-            new Dictionary<string, Func<string, IReplicationDataRow>>
+        private static Dictionary<string, Func<string, IReplicationDataRow>> DATA_ROW_FACTORIES =
+            new Dictionary<string, Func<string, IReplicationDataRow>>()
             {
-                {ReplicationStreamName.EVENTS, raw => EventStreamRow.FromRaw(raw)}
+                {ReplicationStreamName.EVENTS, (raw) => EventStreamRow.FromRaw(raw)},
+                {ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE, (raw) => FederationStreamRow.FromRaw((raw))},
             };
 
         private string _position;

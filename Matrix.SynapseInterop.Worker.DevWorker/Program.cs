@@ -44,7 +44,7 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
             using (var db = new SynapseDbContext(_config.GetConnectionString("synapse")))
             {
                 Console.WriteLine("Received event {0} ({1}) in {2}", e.EventId, e.EventType, e.RoomId);
-                var ev = db.Events.SingleOrDefault(e2 => e2.RoomId == e.RoomId && e2.EventId == e.EventId);
+                var ev = db.EventsJson.SingleOrDefault(e2 => e2.RoomId == e.RoomId && e2.EventId == e.EventId);
 
                 if (ev != null)
                     Console.WriteLine(ev.Json);

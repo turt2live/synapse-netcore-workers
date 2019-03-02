@@ -16,5 +16,8 @@ namespace Matrix.SynapseInterop.Database.Models
 
         [Column("json")]
         public string Json { get; set; }
+
+        [Column("format_version")]
+        public int FormatVersion { get; set; }
     }
 }
