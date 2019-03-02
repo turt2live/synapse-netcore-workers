@@ -28,15 +28,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public TimeSpan GetBackoffForException(string host, Exception ex)
         {
-            SBackoff backoff;
             double multiplier = random.NextDouble() + 0.5;
 
-            if (!hosts.TryGetValue(host, out backoff))
+            if (!hosts.TryGetValue(host, out var backoff))
             {
-                backoff = new SBackoff()
+                backoff = new SBackoff
                 {
                     delayFor = TimeSpan.Zero,
                 };
+
+                hosts.Add(host, backoff);
             }
             
             if (ex is HttpRequestException)
@@ -68,8 +69,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             backoff.delayFor = TimeSpan.FromMilliseconds(Math.Min(MAX_MILLISECONDS, backoff.delayFor.TotalMilliseconds));
-
-            hosts.Add(host, backoff);
+            
             return backoff.delayFor;
         }
     }

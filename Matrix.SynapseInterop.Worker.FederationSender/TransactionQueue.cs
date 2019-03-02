@@ -273,7 +273,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     // NOTE: This is an event format version, not room version.
                     if (roomEvent.Version == 1)
                     {
-                        pduEv = new PduEventV1()
+                        pduEv = new PduEventV1
                         {
                             event_id = roomEvent.EventId
                         };
@@ -362,19 +362,22 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     _destOngoingTrans.Remove(destination);
                 }
 
-                _destOngoingTrans.Add(destination, AttemptNewTransaction(destination));
+                _destOngoingTrans.Add(destination,
+                                      AttemptNewTransaction(destination));
             }
         }
 
         private async Task AttemptNewTransaction(string destination)
         {
             Transaction currentTransaction;
-            Random random = new Random();
+
             if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
             {
                 Console.WriteLine($"No more transactions for {destination}");
                 return;
             }
+
+            _destPendingTransactions.Remove(destination);
 
             while (true)
             {
@@ -382,8 +385,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 using (WorkerMetrics.TransactionDurationTimer(destination))
                 {
-                    _destPendingTransactions.Remove(destination);
-
                     try
                     {
                         await _client.SendTransaction(currentTransaction);
@@ -391,15 +392,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     catch (Exception ex)
                     {
                         Console.WriteLine("Transaction {0} {1} failed: {2}",
-                                          currentTransaction.transaction_id, destination, ex);
+                                          currentTransaction.transaction_id, destination, ex.Message);
                         
                         WorkerMetrics.DecOngoingTransactions();
                         TimeSpan ts = _backoff.GetBackoffForException(currentTransaction.destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
-                        _destPendingTransactions.Add(destination, currentTransaction);
 
-                        Console.WriteLine("Retrying txn {0} in {2}s",
+                        Console.WriteLine("Retrying txn {0} in {1}s",
                                           currentTransaction.transaction_id, ts.TotalSeconds);
 
                         await Task.Delay((int) ts.TotalMilliseconds);
@@ -417,10 +417,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
                 {
                     Console.WriteLine($"No more transactions for {destination}");
-                    break;
+                    return;
                 }
-            }
 
+                _destPendingTransactions.Remove(destination);
+            }
         }
 
         private void ClearDeviceMessages(Transaction transaction)
@@ -569,22 +570,20 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private Transaction GetOrCreateTransactionForDest(string dest)
         {
-            if (!_destPendingTransactions.TryGetValue(dest, out var transaction))
+            if (_destPendingTransactions.TryGetValue(dest, out var transaction)) return transaction;
+            _txnId++;
+
+            transaction = new Transaction
             {
-                _txnId++;
+                edus = new List<EduEvent>(),
+                pdus = new List<IPduEvent>(),
+                origin = _serverName,
+                origin_server_ts = GetTs(),
+                transaction_id = _txnId.ToString(),
+                destination = dest
+            };
 
-                transaction = new Transaction
-                {
-                    edus = new List<EduEvent>(),
-                    pdus = new List<IPduEvent>(),
-                    origin = _serverName,
-                    origin_server_ts = GetTs(),
-                    transaction_id = _txnId.ToString(),
-                    destination = dest
-                };
-
-                _destPendingTransactions.Add(dest, transaction);
-            }
+            _destPendingTransactions.Add(dest, transaction);
 
             return transaction;
         }
