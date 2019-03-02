@@ -179,8 +179,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Try well known
             try
             {
-                var wellKnownJson = await client.GetStringAsync($"https://{destination}/.well-known/matrix/server");
-                var wellKnown = JObject.Parse(wellKnownJson);
+                var res = await client.GetAsync($"https://{destination}/.well-known/matrix/server");
+                res.EnsureSuccessStatusCode();
+                
+                var wellKnown = JObject.Parse(await res.Content.ReadAsStringAsync());
 
                 if (wellKnown.ContainsKey("m.server"))
                 {
@@ -190,7 +192,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 Console.WriteLine($"WARN .well-known is missing m.server");
             }
-            catch (HttpRequestException) { }
+            catch (HttpRequestException) { } // Allow these to fall through.
+            catch (JsonReaderException) { }
 
             Console.WriteLine($"WARN {destination} does not have a .well-known, using defaults");
 
