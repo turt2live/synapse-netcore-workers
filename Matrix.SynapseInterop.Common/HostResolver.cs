@@ -21,11 +21,12 @@ namespace Matrix.SynapseInterop.Common
 
         private ServiceHostEntry[] _entries;
 
-        public HostRecord(Uri uri, ServiceHostEntry[] entries)
+        public HostRecord(Uri uri, ServiceHostEntry[] entries, string host)
         {
             _resolvedUri = uri;
             LastAccessed = DateTime.Now;
             _entries = entries;
+            _host = host;
         }
 
         public Uri GetUri()
@@ -86,7 +87,7 @@ namespace Matrix.SynapseInterop.Common
             using (WorkerMetrics.HostLookupDurationTimer())
             {
                 var res = await ResolveHost(destination);
-                host = new HostRecord(res.Item1, res.Item2);
+                host = new HostRecord(res.Item1, res.Item2, destination);
                 _hosts.Add(destination, host);
             }
             
