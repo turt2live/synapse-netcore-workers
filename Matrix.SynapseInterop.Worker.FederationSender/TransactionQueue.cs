@@ -30,6 +30,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _connString;
         private int _txnId;
         private int _lastEventPoke;
+        private object attemptTransactionLock;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
         private readonly Dictionary<string, Task> _destOngoingTrans;
@@ -216,7 +217,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         edu_type = "m.presence",
                         content = formattedPresence,
                     });
-
+                }
+            }
+            
+            // Do this seperate from the above to batch presence together
+            foreach (var hostState in hostsAndState)
+            {
+                foreach (var host in hostState.Key)
+                {
                     AttemptTransaction(host);
                 }
             }
@@ -339,19 +347,22 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void AttemptTransaction(string destination)
         {
-            if (_destOngoingTrans.ContainsKey(destination))
+            // Lock here to avoid racing.
+            lock (attemptTransactionLock)
             {
-                if (!_destOngoingTrans[destination].IsCompleted)
+                if (_destOngoingTrans.ContainsKey(destination))
                 {
-                    // Already ongoing.
-                    return;
+                    if (!_destOngoingTrans[destination].IsCompleted)
+                    {
+                        // Already ongoing.
+                        return;
+                    }
+
+                    _destOngoingTrans.Remove(destination);
                 }
 
-                _destOngoingTrans.Remove(destination);
+                _destOngoingTrans.Add(destination, AttemptNewTransaction(destination));
             }
-
-            // This might race, it's okay to fail.
-            _destOngoingTrans.TryAdd(destination, AttemptNewTransaction(destination));
         }
 
         private async Task AttemptNewTransaction(string destination)
@@ -367,6 +378,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             while (true)
             {
                 WorkerMetrics.IncOngoingTransactions();
+
                 using (WorkerMetrics.TransactionDurationTimer(destination))
                 {
                     _destPendingTransactions.Remove(destination);
@@ -374,6 +386,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     try
                     {
                         await _client.SendTransaction(currentTransaction);
+                        ClearDeviceMessages(currentTransaction);
                         WorkerMetrics.DecOngoingTransactions();
                         WorkerMetrics.IncTransactionsSent(true, destination);
                         WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
@@ -416,9 +429,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             continue;
                         }
                     }
-
-                    // Remove any device messages 
-                    ClearDeviceMessages(currentTransaction);
                 }
 
                 if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
