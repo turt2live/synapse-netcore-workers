@@ -54,7 +54,7 @@ namespace Matrix.SynapseInterop.Replication
 
         public async Task Reconnect(bool firstAttempt = false)
         {
-            if (!firstAttempt) Console.WriteLine("Lost replication connection - reconnecting");
+            if (!firstAttempt) log.Information("Lost replication connection - reconnecting");
 
             Disconnect();
 
@@ -98,7 +98,7 @@ namespace Matrix.SynapseInterop.Replication
 
             while (true)
             {
-                Console.WriteLine($"Reconnecting to replication: Attempt {attempt++}");
+                log.Information($"Reconnecting to replication: Attempt {attempt++}");
 
                 try
                 {
@@ -107,7 +107,7 @@ namespace Matrix.SynapseInterop.Replication
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Reconnection failed: {ex}");
+                    log.Error($"Reconnection failed: {ex}");
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 }
             }
@@ -136,7 +136,7 @@ namespace Matrix.SynapseInterop.Replication
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("Failed to process command: {0}", ex);
+                        log.Error("Failed to process command: {0}", ex);
                         SendRaw("ERROR Error processing incoming commands");
                         await Reconnect();
                     }
@@ -144,7 +144,7 @@ namespace Matrix.SynapseInterop.Replication
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Failed to read from replication: {0}", ex);
+                log.Error("Failed to read from replication: {0}", ex);
                 ReconnectLoop();
             }
         }
@@ -205,7 +205,7 @@ namespace Matrix.SynapseInterop.Replication
         public void SendRaw(string command)
         {
             string shortCommand = command.Length > 80 ? command.Substring(0, 80) : command;
-            Console.WriteLine($"[Replication] Sending {shortCommand}");
+            log.Information($"Sending {shortCommand}");
 
             try
             {
