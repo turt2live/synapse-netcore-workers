@@ -12,15 +12,15 @@ namespace Matrix.SynapseInterop.Database
     {
         public DbQuery<EventJson> EventsJson { get; set; }
         private DbQuery<Event> Events { get; set; }
-        
+
         public DbQuery<RoomMemberships> RoomMemberships { get; set; }
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
         public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
-        
+
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
-        
+
         private readonly string _connString;
 
         public SynapseDbContext(string connectionString)
@@ -88,6 +88,7 @@ namespace Matrix.SynapseInterop.Database
                                                  js.Json,
                                                  js.FormatVersion));
                 }
+
                 return set;
             }
         }

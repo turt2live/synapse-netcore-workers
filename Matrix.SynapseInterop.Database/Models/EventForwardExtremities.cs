@@ -7,7 +7,7 @@ namespace Matrix.SynapseInterop.Database.Models
     {
         [Column("room_id")]
         public string RoomId { get; set; }
-        
+
         [Column("event_id")]
         public string EventId { get; set; }
     }

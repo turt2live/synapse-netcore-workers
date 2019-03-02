@@ -26,12 +26,14 @@ namespace Matrix.SynapseInterop.Replication.DataRows
             var parsed = JsonConvert.DeserializeObject<List<dynamic>>(rawDataString);
             string typeId = "";
             FederationStreamRow streamRow = new FederationStreamRow();
+
             for (int i = 0; i < parsed.Count; i++)
             {
                 if (i == 0)
                 {
                     typeId = parsed[0];
-                } else if (typeId == "k") // KeyedEduRow
+                }
+                else if (typeId == "k") // KeyedEduRow
                 {
                     var edu = new EduEvent
                     {
@@ -40,12 +42,15 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                         origin = parsed[i].edu.origin,
                         content = parsed[i].edu.content,
                     };
+
                     string[] key = parsed[i].key.ToObject<string[]>();
                     streamRow.keyedEdus.Add(key, edu);
-                } else if (typeId == "p") // PresenceRow
+                }
+                else if (typeId == "p") // PresenceRow
                 {
                     streamRow.presence.Add(((JObject) parsed[i]).ToObject<PresenceState>());
-                } else if (typeId == "e") // EduRow
+                }
+                else if (typeId == "e") // EduRow
                 {
                     streamRow.edus.Add(new EduEvent
                     {
@@ -54,12 +59,14 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                         origin = parsed[i].origin,
                         content = parsed[i].content,
                     });
-                } else if (typeId == "d") // DeviceRow
+                }
+                else if (typeId == "d") // DeviceRow
                 {
                     string destination = parsed[i]["destination"].Value;
                     streamRow.devices.Add(destination);
                 }
             }
+
             return streamRow;
         }
     }

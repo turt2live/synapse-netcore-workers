@@ -8,10 +8,10 @@ namespace Matrix.SynapseInterop.Database.Models
     {
         [Column("user_id")]
         public string UserId { get; set; }
-        
+
         [Column("device_id")]
         public string DeviceId { get; set; }
-      
+
         [Column("display_name")]
         public string DisplayName { get; set; }
     }

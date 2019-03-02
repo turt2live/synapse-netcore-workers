@@ -7,6 +7,7 @@ namespace Matrix.SynapseInterop.Database
     {
         public JObject Content { get; }
         public int Version { get; }
+
         public EventJsonSet(Event baseEvent, string json, int version)
         {
             EventId = baseEvent.EventId;

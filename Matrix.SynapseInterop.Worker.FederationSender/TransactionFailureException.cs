@@ -10,8 +10,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public readonly string Host;
         public readonly string ErrorCode;
         public readonly string Error;
-        public readonly int BackoffFor = -1; 
- 
+        public readonly int BackoffFor = -1;
+
         public TransactionFailureException(string host, HttpStatusCode statusCode, JObject resp)
         {
             this.Host = host;
@@ -21,7 +21,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 BackoffFor = (int) resp["retry_after_ms"];
             }
-            
+
             if (!resp.ContainsKey("errcode")) return;
             ErrorCode = (string) resp["errcode"];
             Error = (string) resp["error"];

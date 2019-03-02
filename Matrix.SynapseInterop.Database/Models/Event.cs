@@ -10,10 +10,10 @@ namespace Matrix.SynapseInterop.Database.Models
 
         [Column("event_id")]
         public string EventId { get; set; }
-        
+
         [Column("room_id")]
         public string RoomId { get; set; }
-        
+
         [Column("sender")]
         public string Sender { get; set; }
     }

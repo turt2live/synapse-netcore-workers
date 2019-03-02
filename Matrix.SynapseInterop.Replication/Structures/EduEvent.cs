@@ -7,7 +7,7 @@ namespace Matrix.SynapseInterop.Replication.Structures
     {
         public JObject content;
         public string edu_type;
-   
+
         [JsonIgnore]
         public string InternalKey;
 

@@ -11,7 +11,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         public TimeSpan delayFor;
     }
-    
+
     public class Backoff
     {
         private const int MaxMilliseconds = 60 * 60 * 24 * 1000;
@@ -41,17 +41,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 hosts.Add(host, backoff);
             }
-            
+
             if (ex is HttpRequestException || ex is JsonReaderException || ex is SocketException)
             {
                 // This is a failure to route to the host, rather than a HTTP status code failure.
                 // We want to harshly rate limit here, as the box may not host a synapse box.
-                
+
                 // Failing to parse the json is in the same category because it's usually a 404 page.
-                
+
                 // A socket exception also counts, because they are usually indicative of a remote host not being online.
                 // We could also be suffering, which means we should probably backoff anyway.
-                
+
                 backoff.delayFor += HttpReqBackoff * multiplier;
             }
             else if (ex is TransactionFailureException txEx)
@@ -87,7 +87,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             backoff.delayFor = TimeSpan.FromMilliseconds(Math.Min(MaxMilliseconds, backoff.delayFor.TotalMilliseconds));
-            
+
             return backoff.delayFor;
         }
     }

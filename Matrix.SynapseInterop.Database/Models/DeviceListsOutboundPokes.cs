@@ -11,7 +11,7 @@ namespace Matrix.SynapseInterop.Database.Models
 
         [Column("user_id")]
         public string UserId { get; set; }
-        
+
         [Column("device_id")]
         public string DeviceId { get; set; }
 
@@ -20,7 +20,7 @@ namespace Matrix.SynapseInterop.Database.Models
 
         [Column("ts")]
         public long Ts { get; set; }
-        
+
         [Column("destination")]
         public string Destination { get; set; }
     }

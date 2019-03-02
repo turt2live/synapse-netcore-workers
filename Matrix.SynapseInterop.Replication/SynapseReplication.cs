@@ -37,6 +37,7 @@ namespace Matrix.SynapseInterop.Replication
             // Resolve the address
             var dns = await Dns.GetHostEntryAsync(address);
             IPAddress ip;
+
             try
             {
                 // TcpClient doesn't support IPV6 :(
@@ -46,7 +47,7 @@ namespace Matrix.SynapseInterop.Replication
             {
                 throw new Exception($"ERROR: No IPv4 address found for {address}");
             }
-            
+
             // Form a connection
             _client = new TcpClient();
             Console.WriteLine($"Connecting to replication stream on {ip}:{port}");
