@@ -6,6 +6,7 @@ An experimental project to build Synapse-compatible workers in .NET Core. For qu
 ----
 
 **⚠️⚠️ Not intended for production usage yet ⚠️⚠️** 
+
 Much of this is largely based upon internal features to Synapse and is generally considered unstable. Do not use this in a
 production environment as this may not work perfectly yet. The plan is to make this production ready, although with a caution
 that it may not be forwards compatible with future Synapse releases.
