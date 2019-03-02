@@ -390,7 +390,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             while (true)
             {
-                using (WorkerMetrics.TransactionDurationTimer(destination))
+                using (WorkerMetrics.TransactionDurationTimer())
                 {
                     try
                     {
@@ -407,7 +407,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         Console.WriteLine("Transaction {0} {1} failed: {2}",
                                           currentTransaction.transaction_id, destination, ex.Message);
                         
-                        TimeSpan ts = _backoff.GetBackoffForException(currentTransaction.destination, ex);
+                        TimeSpan ts = _backoff.GetBackoffForException(destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
 
@@ -418,8 +418,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         continue;
                     }
                 }
-                
-                _backoff.ClearBackoff(currentTransaction.destination);
+
+                if (_backoff.ClearBackoff(destination))
+                {
+                    Console.WriteLine("{0} has come back online", destination);
+                }
+
                 ClearDeviceMessages(currentTransaction);
                 WorkerMetrics.DecOngoingTransactions();
                 WorkerMetrics.IncTransactionsSent(true, destination);
