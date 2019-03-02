@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using Newtonsoft.Json;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
@@ -46,6 +47,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 // We want to harshly rate limit here, as the box may not host a synapse box.
                 backoff.delayFor += HttpReqBackoff * multiplier;
             }
+            else if (ex is JsonReaderException)
+            {
+                // This is an error that failed to parse. Give them a large backoff.
+                backoff.delayFor += HttpReqBackoff * multiplier;
+            }
             else if (ex is TransactionFailureException txEx)
             {
                 if (txEx.Code == HttpStatusCode.NotFound)
@@ -64,6 +70,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 else if (txEx.Code >= HttpStatusCode.InternalServerError)
                 {
                     // These just happen, and synapse usually doesn't tell us why.
+                    backoff.delayFor += NormalBackoff * multiplier;
+                }
+                else
+                {
+                    // Eh, it's a error.
                     backoff.delayFor += NormalBackoff * multiplier;
                 }
             }
