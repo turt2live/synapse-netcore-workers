@@ -8,9 +8,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public struct Transaction
     {
-        [JsonIgnore]
-        public int BackoffSecs;
-
         public string transaction_id;
         public string origin;
         public string destination;

@@ -21,7 +21,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
-        private const int MAX_BACKOFF_SECS = 60 * 60 * 24;
         private readonly FederationClient _client;
         private Task _presenceProcessing;
         private Task _eventsProcessing;
@@ -31,6 +30,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private int _txnId;
         private int _lastEventPoke;
         private object attemptTransactionLock = new object();
+        private Backoff _backoff;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
         private readonly Dictionary<string, Task> _destOngoingTrans;
@@ -53,6 +53,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _connString = connectionString;
             _lastEventPoke = -1;
             _signingKey = key;
+            _backoff = new Backoff();
         }
 
         public void OnEventUpdate(string streamPos)
@@ -386,50 +387,32 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     try
                     {
                         await _client.SendTransaction(currentTransaction);
-                        ClearDeviceMessages(currentTransaction);
-                        WorkerMetrics.DecOngoingTransactions();
-                        WorkerMetrics.IncTransactionsSent(true, destination);
-                        WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
-                        WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
-                    }
-                    catch (HttpRequestException ex)
-                    {
-                        if (ex.InnerException is SocketException)
-                        {
-                            // Really backoff a socket exception hard, because the host probably doesn't exist
-                            currentTransaction.BackoffSecs *= 10;
-                        }
-
-                        throw;
                     }
                     catch (Exception ex)
                     {
-                        // XXX: Let's not retry presence.
-                        bool retry = currentTransaction.pdus.Count > 0 ||
-                                     !currentTransaction.edus.TrueForAll(ev => ev.edu_type == "m.presence");
-
-                        WorkerMetrics.DecOngoingTransactions();
-
                         Console.WriteLine("Transaction {0} {1} failed: {2}",
                                           currentTransaction.transaction_id, destination, ex);
+                        
+                        WorkerMetrics.DecOngoingTransactions();
+                        TimeSpan ts = _backoff.GetBackoffForException(currentTransaction.destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
+                        _destPendingTransactions.Add(destination, currentTransaction);
 
-                        if (retry)
-                        {
-                            _destPendingTransactions.Add(destination, currentTransaction);
-                            currentTransaction.BackoffSecs *= 2;
-                            // Add some randomness to the backoff
-                            currentTransaction.BackoffSecs = (int) Math.Ceiling(currentTransaction.BackoffSecs * random.NextDouble() + 0.5);
+                        Console.WriteLine("Retrying txn {0} in {2}s",
+                                          currentTransaction.transaction_id, ts.TotalSeconds);
 
-                            Console.WriteLine("Retrying txn {0} in {2}",
-                                              currentTransaction.transaction_id, currentTransaction.BackoffSecs);
-
-                            await Task.Delay(Math.Min(currentTransaction.BackoffSecs * 1000, MAX_BACKOFF_SECS));
-                            continue;
-                        }
+                        await Task.Delay((int) ts.TotalMilliseconds);
+                        continue;
                     }
                 }
+                
+                _backoff.ClearBackoff(currentTransaction.destination);
+                ClearDeviceMessages(currentTransaction);
+                WorkerMetrics.DecOngoingTransactions();
+                WorkerMetrics.IncTransactionsSent(true, destination);
+                WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
+                WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
 
                 if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
                 {
@@ -597,8 +580,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     origin = _serverName,
                     origin_server_ts = GetTs(),
                     transaction_id = _txnId.ToString(),
-                    destination = dest,
-                    BackoffSecs = 2
+                    destination = dest
                 };
 
                 _destPendingTransactions.Add(dest, transaction);

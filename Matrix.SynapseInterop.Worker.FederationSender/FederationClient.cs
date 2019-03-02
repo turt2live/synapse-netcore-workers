@@ -81,7 +81,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             try
             {    
-                Console.WriteLine($"[TX] PUT {uri} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
+                Console.WriteLine($"[TX] {transaction.destination} PUT {uri} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
                 resp = await client.SendAsync(msg);
             }
             catch (HttpRequestException ex)
@@ -92,7 +92,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 throw;
             }
 
-            Console.WriteLine($"[TX] Response: {resp.StatusCode} {resp.ReasonPhrase}");
+            Console.WriteLine($"[TX] {transaction.destination} Response: {resp.StatusCode} {resp.ReasonPhrase}");
 
             if (resp.IsSuccessStatusCode)
             {
@@ -106,13 +106,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // TODO: Should we drop well known for other reasons?
 
             string error = await resp.Content.ReadAsStringAsync();
+            JObject err = JObject.Parse(error);
 
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
             {
                 // Possible key fail, show some debug info for people to debug.
                 try
                 {
-                    JObject err = JObject.Parse(error);
                     string errCode = (string) err["errcode"];
                     string errorString = (string) err["error"];
 
@@ -131,7 +131,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
             }
 
-            throw new Exception(error);
+            throw new TransactionFailureException(transaction.destination, resp.StatusCode, err);
         }
 
         private void SignRequest(HttpRequestMessage msg, string destination, JObject body = null)
