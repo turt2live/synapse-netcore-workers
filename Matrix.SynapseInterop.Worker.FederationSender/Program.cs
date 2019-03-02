@@ -30,7 +30,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                            metricConfig.GetValue("bindPort", 9150),
                                            metricConfig.GetValue<string>("bindHost"));
             }
-
             new FederationSender(_config).Start().Wait();
             Thread.Sleep(-1);
         }

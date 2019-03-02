@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="DnsClient" Version="1.2.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
     <PackageReference Include="prometheus-net" Version="3.0.3" />
   </ItemGroup>
   <ItemGroup>
