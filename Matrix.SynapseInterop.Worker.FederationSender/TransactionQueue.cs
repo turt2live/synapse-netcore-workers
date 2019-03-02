@@ -1,25 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Transactions;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.Models;
 using Matrix.SynapseInterop.Replication.Structures;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public class TransactionQueue
     {
+        private static readonly ILogger log = Log.ForContext<TransactionQueue>();
+        
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
         private readonly FederationClient _client;
@@ -40,7 +38,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
 
-        public TransactionQueue(string serverName, string connectionString, SigningKey key, IConfigurationSection clientConfig)
+        public TransactionQueue(string serverName,
+                                string connectionString,
+                                SigningKey key,
+                                IConfigurationSection clientConfig
+        )
         {
             _client = new FederationClient(serverName, key, clientConfig);
             _userPresence = new Dictionary<string, PresenceState>();
@@ -62,6 +64,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 txConcurrency = 100;
             }
+
             concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
         }
 
@@ -74,13 +77,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return;
             }
 
-            Console.WriteLine("Poking ProcessPendingEvents");
+            log.Debug("Poking ProcessPendingEvents");
 
             _eventsProcessing = ProcessPendingEvents().ContinueWith((t) =>
             {
                 if (t.IsFaulted)
                 {
-                    Console.WriteLine("Failed to process events: {0}", t.Exception);
+                    log.Error("Failed to process events: {Exception}", t.Exception);
                 }
             });
         }
@@ -216,7 +219,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 foreach (var host in hostState.Key)
                 {
-                    Console.WriteLine($"Sending presence to {host}");
+                    log.Debug("Sending presence to {host}", host);
                     // TODO: Handle case where we have over 100 EDUs
                     Transaction transaction = GetOrCreateTransactionForDest(host);
 
@@ -229,7 +232,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     });
                 }
             }
-            
+
             // Do this seperate from the above to batch presence together
             foreach (var hostState in hostsAndState)
             {
@@ -255,17 +258,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (events.Count == 0)
             {
-                Console.WriteLine("No new events to handle");
+                log.Debug("No new events to handle");
                 return;
             }
 
             if (events.Count == MAX_PDUS_PER_TRANSACTION)
             {
-                Console.WriteLine($"WARN: more than {MAX_PDUS_PER_TRANSACTION} events behind");
+                log.Warning("More than {Max} events behind", MAX_PDUS_PER_TRANSACTION);
                 top = events.Last().StreamOrdering;
             }
 
-            Console.WriteLine($"Processing from {last} to {top}");
+            log.Information("Processing from {last} to {top}", last, top);
             // Skip any events that didn't come from us.
             var roomEvents = events.SkipWhile(e => !IsMineId(e.Sender)).GroupBy(e => e.RoomId);
 
@@ -341,7 +344,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             using (var db = new SynapseDbContext(_connString))
             {
-                Console.WriteLine($"Saving position {top} to DB");
+                log.Debug("Saving position {top} to DB", top);
                 var streamPos = db.FederationStreamPosition.First((e) => e.Type == "events");
                 streamPos.StreamId = top;
                 db.SaveChanges();
@@ -350,7 +353,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Still behind?
             if (events.Count == MAX_PDUS_PER_TRANSACTION)
             {
-                Console.WriteLine("Calling ProcessPendingEvents again because we are still behind");
+                log.Information("Calling ProcessPendingEvents again because we are still behind");
                 await ProcessPendingEvents();
             }
         }
@@ -382,7 +385,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
             {
-                Console.WriteLine($"No more transactions for {destination}");
+                log.Debug("No more transactions for {destination}", destination);
                 return;
             }
 
@@ -404,15 +407,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         WorkerMetrics.DecOngoingTransactions();
                         concurrentTransactionLock.Release();
 
-                        Console.WriteLine("Transaction {0} {1} failed: {2}",
-                                          currentTransaction.transaction_id, destination, ex.Message);
-                        
+                        log.Warning("Transaction {txnId} {destination} failed: {message}",
+                                    currentTransaction.transaction_id, destination, ex.Message);
+
                         TimeSpan ts = _backoff.GetBackoffForException(destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
 
-                        Console.WriteLine("Retrying txn {0} in {1}s",
-                                          currentTransaction.transaction_id, ts.TotalSeconds);
+                        log.Information("Retrying txn {txnId} in {secs}s",
+                                        currentTransaction.transaction_id, ts.TotalSeconds);
 
                         await Task.Delay((int) ts.TotalMilliseconds);
                         continue;
@@ -421,7 +424,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (_backoff.ClearBackoff(destination))
                 {
-                    Console.WriteLine("{0} has come back online", destination);
+                    log.Information("{destination} has come back online", destination);
                 }
 
                 ClearDeviceMessages(currentTransaction);
@@ -432,7 +435,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
                 {
-                    Console.WriteLine($"No more transactions for {destination}");
+                    log.Debug("No more transactions for {destination}", destination);
                     return;
                 }
 
@@ -462,7 +465,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                     else
                     {
-                        Console.WriteLine("WARN: No messages to delete in outbox, despite sending messages in this txn");
+                        log.Warning("No messages to delete in outbox, despite sending messages in this txn");
                     }
                 }
 
@@ -486,7 +489,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
                 else
                 {
-                    Console.WriteLine("WARN: No device lists to mark as sent, despite sending lists in this txn");
+                    log.Warning("No device lists to mark as sent, despite sending lists in this txn");
                 }
             }
         }

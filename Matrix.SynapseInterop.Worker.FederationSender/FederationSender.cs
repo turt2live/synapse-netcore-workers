@@ -11,11 +11,13 @@ using Matrix.SynapseInterop.Replication.Structures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.Configuration;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public class FederationSender
     {
+        private static readonly ILogger log = Log.ForContext<FederationSender>();
         private IConfiguration _config;
         private int _stream_position;
         private int _last_ack;
@@ -35,7 +37,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public async Task Start()
         {
-            Console.WriteLine("Starting FederationWorker");
+            log.Information("Starting FederationWorker");
             _synapseReplication = new SynapseReplication();
             _synapseReplication.ClientName = "NetCoreFederationWorker";
             _synapseReplication.ServerName += Replication_ServerName;
@@ -101,7 +103,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Failed to handle transaction, got: {0}", ex);
+                log.Warning("Failed to handle transaction, got {ex}", ex);
             }
         }
 
@@ -112,7 +114,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void Replication_ServerName(object sender, string serverName)
         {
-            Console.WriteLine("Server name: " + serverName);
+            log.Information("Server name: {serverName}", serverName);
 
             _transactionQueue = new TransactionQueue(serverName,
                                                      connectionString,

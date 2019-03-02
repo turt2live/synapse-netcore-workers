@@ -1,9 +1,19 @@
-# synapse-netcore-workers
+﻿# synapse-netcore-workers
 
 An experimental project to build Synapse-compatible workers in .NET Core. For questions or development news, visit 
 [#synapse-netcore-workers:t2bot.io](https://matrix.to/#/#synapse-netcore-workers:t2bot.io) on Matrix.
 
-**Not intended for production usage yet.**
+----
+
+**⚠️⚠️ Not intended for production usage yet ⚠️⚠️** 
+
+Much of this is largely based upon internal features to Synapse and is generally considered unstable. Do not use this in a
+production environment as this may not work perfectly yet. The plan is to make this production ready, although with a caution
+that it may not be forwards compatible with future Synapse releases.
+
+It is assumed you are an expert on running Synapse workers before trying to use this project.
+
+----
 
 Reference material:
 * [Synapse TCP replication protocol](https://github.com/matrix-org/synapse/blob/master/docs/tcp_replication.rst)

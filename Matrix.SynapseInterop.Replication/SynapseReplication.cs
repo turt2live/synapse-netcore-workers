@@ -7,11 +7,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Replication.DataRows;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Replication
 {
     public class SynapseReplication
     {
+        private static readonly ILogger log = Log.ForContext<SynapseReplication>(); 
         private readonly Dictionary<string, ReplicationData>
             _pendingBatches = new Dictionary<string, ReplicationData>();
 
@@ -72,7 +74,7 @@ namespace Matrix.SynapseInterop.Replication
 
             // Form a connection
             _client = new TcpClient();
-            Console.WriteLine($"Connecting to replication stream on {ip}:{_lastPort}");
+            log.Information("Connecting to replication stream on {ip}:{port}", ip, port);
             await _client.ConnectAsync(ip, _lastPort);
 
             // Name our client
