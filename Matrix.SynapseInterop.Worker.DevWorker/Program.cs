@@ -11,7 +11,7 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
 {
     internal class Program
     {
-        private static readonly ILogger log = Log.ForContext<SynapseReplication>();
+        private static ILogger log;
         private static IConfiguration _config;
 
         private static void Main(string[] args)
@@ -24,6 +24,7 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
                      .Build();
 
             Logger.Setup(_config.GetSection("Logging"));
+            log = Log.ForContext<Program>();
 
             StartReplicationAsync();
 
