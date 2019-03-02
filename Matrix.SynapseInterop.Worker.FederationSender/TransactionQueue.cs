@@ -30,7 +30,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _connString;
         private int _txnId;
         private int _lastEventPoke;
-        private object attemptTransactionLock;
+        private object attemptTransactionLock = new object();
 
         private readonly Dictionary<string, PresenceState> _userPresence;
         private readonly Dictionary<string, Task> _destOngoingTrans;
