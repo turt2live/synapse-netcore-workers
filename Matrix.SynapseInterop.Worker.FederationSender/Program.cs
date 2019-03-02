@@ -1,12 +1,10 @@
-﻿using Matrix.SynapseInterop.Database;
-using Matrix.SynapseInterop.Replication;
-using Matrix.SynapseInterop.Replication.DataRows;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using System;
-using System.Linq;
 using System.Threading;
 using Matrix.SynapseInterop.Common;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Events;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
@@ -22,6 +20,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                      .AddCommandLine(args)
                      .Build();
 
+            var logConfig = _config.GetSection("Logging");
+
+            if (!Enum.TryParse(logConfig.GetValue<string>("level"), out LogEventLevel level))
+            {
+                level = LogEventLevel.Information;
+            }
+
+            Log.Logger = new LoggerConfiguration().Filter
+                                                  .ByIncludingOnly(e => e.Level >= level)
+                                                  .WriteTo.Console(outputTemplate: 
+                                                                   "{Timestamp:yy-MM-dd HH:mm:ss.fff} {Level:u3} {SourceContext:lj} {Message:lj}{NewLine}{Exception}")
+                                                  .CreateLogger();
+            
             var metricConfig = _config.GetSection("Metrics");
 
             if (metricConfig != null && metricConfig.GetValue<bool>("enabled"))
@@ -30,6 +41,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                            metricConfig.GetValue("bindPort", 9150),
                                            metricConfig.GetValue<string>("bindHost"));
             }
+
             new FederationSender(_config).Start().Wait();
             Thread.Sleep(-1);
         }
