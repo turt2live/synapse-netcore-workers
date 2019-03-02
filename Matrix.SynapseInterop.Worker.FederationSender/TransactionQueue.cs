@@ -19,6 +19,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
+        private readonly Backoff _backoff;
         private readonly FederationClient _client;
         private readonly string _connString;
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
@@ -28,14 +29,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
+        private readonly object attemptTransactionLock = new object();
         private readonly SemaphoreSlim concurrentTransactionLock;
-        private readonly Backoff _backoff;
         private Task _eventsProcessing;
         private int _lastEventPoke;
         private Task _presenceProcessing;
         private SigningKey _signingKey;
         private int _txnId;
-        private readonly object attemptTransactionLock = new object();
 
         public TransactionQueue(string serverName,
                                 string connectionString,

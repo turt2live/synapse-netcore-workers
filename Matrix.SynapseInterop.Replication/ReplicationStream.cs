@@ -39,8 +39,9 @@ namespace Matrix.SynapseInterop.Replication
                 {ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE, raw => FederationStreamRow.FromRaw(raw)}
             };
 
-        private string _position;
         private readonly SynapseReplication _replicationHost;
+
+        private string _position;
 
         public string StreamName { get; }
 

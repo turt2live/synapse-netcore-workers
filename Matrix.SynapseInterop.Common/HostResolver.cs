@@ -12,9 +12,9 @@ namespace Matrix.SynapseInterop.Common
     public class HostRecord
     {
         private static readonly TimeSpan TTL = TimeSpan.FromDays(1);
-        private readonly string _host;
 
         private readonly SrvRecord[] _entries;
+        private readonly string _host;
         private readonly Uri _resolvedUri;
         public DateTime LastAccessed;
 
