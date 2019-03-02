@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.Models;
@@ -112,7 +113,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private void Replication_ServerName(object sender, string serverName)
         {
             Console.WriteLine("Server name: " + serverName);
-            _transactionQueue = new TransactionQueue(serverName, connectionString, key, _config.GetSection("Federation"));
+
+            _transactionQueue = new TransactionQueue(serverName,
+                                                     connectionString,
+                                                     key,
+                                                     _config.GetSection("Federation"));
         }
 
         private void UpdateToken(int token)

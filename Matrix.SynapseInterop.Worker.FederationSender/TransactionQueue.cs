@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 using Matrix.SynapseInterop.Common;
@@ -31,6 +32,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private int _lastEventPoke;
         private object attemptTransactionLock = new object();
         private Backoff _backoff;
+        private readonly SemaphoreSlim concurrentTransactionLock;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
         private readonly Dictionary<string, Task> _destOngoingTrans;
@@ -54,6 +56,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _lastEventPoke = -1;
             _signingKey = key;
             _backoff = new Backoff();
+            int txConcurrency = clientConfig.GetValue<int>("maxConcurrency");
+
+            if (txConcurrency == 0)
+            {
+                txConcurrency = 100;
+            }
+            concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
         }
 
         public void OnEventUpdate(string streamPos)
@@ -381,20 +390,23 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             while (true)
             {
-                WorkerMetrics.IncOngoingTransactions();
-
                 using (WorkerMetrics.TransactionDurationTimer(destination))
                 {
                     try
                     {
+                        await concurrentTransactionLock.WaitAsync();
+                        WorkerMetrics.IncOngoingTransactions();
                         await _client.SendTransaction(currentTransaction);
+                        concurrentTransactionLock.Release();
                     }
                     catch (Exception ex)
                     {
+                        WorkerMetrics.DecOngoingTransactions();
+                        concurrentTransactionLock.Release();
+
                         Console.WriteLine("Transaction {0} {1} failed: {2}",
                                           currentTransaction.transaction_id, destination, ex.Message);
                         
-                        WorkerMetrics.DecOngoingTransactions();
                         TimeSpan ts = _backoff.GetBackoffForException(currentTransaction.destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
