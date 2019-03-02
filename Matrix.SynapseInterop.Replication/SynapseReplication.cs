@@ -42,9 +42,9 @@ namespace Matrix.SynapseInterop.Replication
                 // TcpClient doesn't support IPV6 :(
                 ip = dns.AddressList.First(i => i.AddressFamily == AddressFamily.InterNetwork);
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
-                throw new Exception($"ERROR: No IPv4 address found for {address}");
+                throw new InvalidOperationException($"No IPv4 address found for {address}", ex);
             }
             
             // Form a connection
