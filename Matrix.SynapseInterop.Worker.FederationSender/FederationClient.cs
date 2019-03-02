@@ -7,6 +7,7 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+using Matrix.SynapseInterop.Common;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -17,37 +18,33 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private SigningKey key;
         private HttpClient client;
-        private HttpClient wKclient;
         private Dictionary<string, Uri> destinationUris;
         private string origin;
         private bool allowSelfSigned;
-        private bool defaultToSecurePort;
+        private HostResolver hostResolver;
 
         public FederationClient(string serverName, SigningKey key, IConfigurationSection config)
         {
             origin = serverName;
 
-            client = new HttpClient( new HttpClientHandler
+            client = new HttpClient(new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
             });
 
             client.Timeout = TimeSpan.FromSeconds(30);
-            
-            wKclient = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
-            });
-
-            wKclient.Timeout = TimeSpan.FromSeconds(15);
 
             this.key = key;
             destinationUris = new Dictionary<string, Uri>();
+            hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008);
             allowSelfSigned = config.GetValue<bool>("allowSelfSigned");
-            defaultToSecurePort = config.GetValue<bool>("defaultToSecurePort");
         }
 
-        private bool ServerCertificateValidationCallback(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslpolicyerrors)
+        private bool ServerCertificateValidationCallback(object sender,
+                                                         X509Certificate certificate,
+                                                         X509Chain chain,
+                                                         SslPolicyErrors sslpolicyerrors
+        )
         {
             if (sslpolicyerrors.HasFlag(SslPolicyErrors.None))
             {
@@ -69,8 +66,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public async Task SendTransaction(Transaction transaction)
         {
-            var uri = new UriBuilder(await GetUrlForDestination(transaction.destination));
-            uri.Path += $"send/{transaction.transaction_id}/";
+            var uri = new UriBuilder(await hostResolver.GetUriForHost(transaction.destination))
+            {
+                Path = $"/_matrix/federation/v1/send/{transaction.transaction_id}/",
+                Scheme = "https"
+            };
+
 
             var msg = new HttpRequestMessage
             {
@@ -90,7 +91,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             HttpResponseMessage resp;
 
             try
-            {    
+            {
                 Console.WriteLine($"[TX] {transaction.destination} PUT {uri} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
                 resp = await client.SendAsync(msg);
             }
@@ -169,53 +170,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             msg.Headers.Authorization =
                 new AuthenticationHeaderValue("X-Matrix",
                                               authHeader);
-        }
-
-        private async Task<string> GetUrlForDestination(string destination)
-        {
-            Uri uri;
-
-            if (!destinationUris.TryGetValue(destination, out uri))
-            {
-                uri = await LookupServerUri(destination);
-                destinationUris.Add(destination, uri);
-            }
-            
-            return $"{uri}_matrix/federation/v1/";
-        }
-
-        private async Task<Uri> LookupServerUri(string destination)
-        {
-            // Try well known
-            try
-            {
-                var res = await wKclient.GetAsync($"https://{destination}/.well-known/matrix/server");
-                res.EnsureSuccessStatusCode();
-                
-                var wellKnown = JObject.Parse(await res.Content.ReadAsStringAsync());
-
-                if (wellKnown.ContainsKey("m.server"))
-                {
-                    destination = wellKnown["m.server"].ToObject<string>();
-                    return new Uri($"https://{destination}");
-                }
-
-                Console.WriteLine($"WARN .well-known is missing m.server");
-            }
-            catch (HttpRequestException) { } // Allow these to fall through.
-            catch (JsonReaderException) { }
-
-            Console.WriteLine($"WARN {destination} does not have a .well-known, using defaults");
-
-            if (Uri.TryCreate(defaultToSecurePort ? $"https://{destination}:8448" : $"http://{destination}:8008",
-                              UriKind.Absolute, 
-                              out var uri)
-            )
-            {
-                return uri;
-            }
-
-            throw new Exception($"Failed to create URI for {destination}");
         }
     }
 }

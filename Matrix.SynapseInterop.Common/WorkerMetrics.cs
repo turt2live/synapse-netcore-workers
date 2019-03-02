@@ -42,11 +42,21 @@ namespace Matrix.SynapseInterop.Common
                                         LabelNames =
                                             new[]
                                             {
-                                                "instance",
-                                                "destination"
+                                                "instance"
                                             }
                                     });
-
+ 
+        static readonly Histogram HostLookupDuration = 
+            Metrics.CreateHistogram($"{PREFIX}_hostlookup_duration",
+                                    "Time taken to complete a host lookup",
+                                    new HistogramConfiguration
+                                    {
+                                        LabelNames =
+                                            new[]
+                                            {
+                                                "instance"
+                                            }
+                                    });
         static readonly Histogram DbCallDuration = 
             Metrics.CreateHistogram($"{PREFIX}_db_call_duration",
                                     "Time taken to complete a DB call",
@@ -71,6 +81,32 @@ namespace Matrix.SynapseInterop.Common
                                             "instance",
                                         }
                                 });
+        
+        static readonly Gauge CacheSize = 
+            Metrics.CreateGauge($"{PREFIX}_cache_size",
+                                "The size of a given named cache",
+                                new GaugeConfiguration
+                                {
+                                    LabelNames =
+                                        new[]
+                                        {
+                                            "instance",
+                                            "cache_name"
+                                        }
+                                });
+
+        static readonly Counter CacheMiss = 
+            Metrics.CreateCounter($"{PREFIX}_cache_miss",
+                                  "Number of requested records that were missed by a named cache",
+                                  new CounterConfiguration
+                                  {
+                                      LabelNames =
+                                          new[]
+                                          {
+                                              "instance",
+                                              "cache_name"
+                                          }
+                                  });
 
         private static MetricServer _srv;
         private static string _name;
@@ -104,14 +140,29 @@ namespace Matrix.SynapseInterop.Common
             TransactionEventsSent.WithLabels(_name, type, destination).Inc(count);
         }
 
-        public static ITimer TransactionDurationTimer(string destination)
+        public static ITimer TransactionDurationTimer()
         {
-            return TransactionDuration.WithLabels(_name, destination).NewTimer();
+            return TransactionDuration.WithLabels(_name).NewTimer();
+        }
+        
+        public static ITimer HostLookupDurationTimer()
+        {
+            return HostLookupDuration.WithLabels(_name).NewTimer();
         }
         
         public static ITimer DbCallTimer(string callName)
         {
             return DbCallDuration.WithLabels(_name, callName).NewTimer();
+        }
+
+        public static void ReportCacheSize(string cacheName, int size)
+        {
+            CacheSize.WithLabels(_name, cacheName).Set(size);
+        }
+        
+        public static void ReportCacheMiss(string cacheName)
+        {
+            CacheMiss.WithLabels(_name, cacheName).Inc();
         }
     }
 }
