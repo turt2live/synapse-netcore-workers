@@ -14,7 +14,7 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
         private static void Main(string[] args)
         {
             _config = new ConfigurationBuilder()
-                     .AddJsonFile("appsettings.default.json", true, true)
+                     .AddJsonFile("appsettings.json", true, true)
                      .AddEnvironmentVariables()
                      .AddCommandLine(args)
                      .Build();
