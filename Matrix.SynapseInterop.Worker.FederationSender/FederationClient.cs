@@ -61,7 +61,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             var uri = new UriBuilder(await GetUrlForDestination(transaction.destination));
             uri.Path += $"send/{transaction.transaction_id}/";
-            Console.WriteLine($"[TX] PUT {uri} ");
 
             var msg = new HttpRequestMessage
             {
@@ -81,7 +80,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             HttpResponseMessage resp;
 
             try
-            {
+            {    
+                Console.WriteLine($"[TX] PUT {uri} PDUs=${transaction.pdus.Count} EDUs={transaction.edus.Count}");
                 resp = await client.SendAsync(msg);
             }
             catch (HttpRequestException ex)
