@@ -36,10 +36,20 @@ namespace Matrix.SynapseInterop.Replication
 
             // Resolve the address
             var dns = await Dns.GetHostEntryAsync(address);
-            var ip = dns.AddressList[0];
-
+            IPAddress ip;
+            try
+            {
+                // TcpClient doesn't support IPV6 :(
+                ip = dns.AddressList.First(i => i.AddressFamily == AddressFamily.InterNetwork);
+            }
+            catch (InvalidOperationException)
+            {
+                throw new Exception($"ERROR: No IPv4 address found for {address}");
+            }
+            
             // Form a connection
             _client = new TcpClient();
+            Console.WriteLine($"Connecting to replication stream on {ip}:{port}");
             await _client.ConnectAsync(ip, port);
 
             // Name our client
@@ -81,7 +91,14 @@ namespace Matrix.SynapseInterop.Replication
                     result.Append(Encoding.UTF8.GetString(buf, 0, read));
                 } while (stream.DataAvailable);
 
-                ProcessCommands(result.ToString());
+                try
+                {
+                    ProcessCommands(result.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Failed to process command: {0}", ex);
+                }
             }
         }
 
@@ -151,6 +168,11 @@ namespace Matrix.SynapseInterop.Replication
         public void SubscribeStream(string streamName, string position)
         {
             SendRaw("REPLICATE " + streamName + " " + position);
+        }
+
+        public void SendFederationAck(string token)
+        {
+            SendRaw($"FEDERATION_ACK {token}");
         }
 
         public ReplicationStream<T> BindStream<T>() where T : IReplicationDataRow
