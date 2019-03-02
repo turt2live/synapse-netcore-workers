@@ -60,7 +60,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
                 else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                 {
-                    backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 500);
+                    backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 }
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
                 {
