@@ -30,6 +30,7 @@ namespace Matrix.SynapseInterop.Replication
         public event EventHandler<StreamPosition> PositionUpdate;
         public event EventHandler<string> Error;
         public event EventHandler<string> Ping;
+        public event EventHandler Connected; // Fired for reconnections too
 
         public async Task Connect(string address, int port)
         {
@@ -85,6 +86,8 @@ namespace Matrix.SynapseInterop.Replication
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             Task.Run(() => ReadLoop());
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+
+            Connected?.Invoke(this, null);
         }
 
         private async void ReconnectLoop()
@@ -199,6 +202,9 @@ namespace Matrix.SynapseInterop.Replication
 
         public void SendRaw(string command)
         {
+            string shortCommand = command.Length > 80 ? command.Substring(0, 80) : command;
+            Console.WriteLine($"[Replication] Sending {shortCommand}");
+
             try
             {
                 _client.Client.Send(Encoding.UTF8.GetBytes(command + "\n"));

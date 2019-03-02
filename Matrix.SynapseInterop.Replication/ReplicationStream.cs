@@ -40,6 +40,7 @@ namespace Matrix.SynapseInterop.Replication
             };
 
         private string _position;
+        private SynapseReplication _replicationHost;
 
         public string StreamName { get; }
 
@@ -55,13 +56,24 @@ namespace Matrix.SynapseInterop.Replication
 
         internal ReplicationStream(SynapseReplication replicationHost, string resumeFrom)
         {
+            _replicationHost = replicationHost;
+
             StreamName = DATA_ROW_STREAM_NAMES[typeof(T)];
             if (string.IsNullOrWhiteSpace(StreamName)) throw new ArgumentException("No stream for data row type");
 
+            CurrentPosition = resumeFrom;
+
             if (string.IsNullOrWhiteSpace(resumeFrom)) resumeFrom = StreamPosition.LATEST;
-            replicationHost.RData += ReplicationHost_RData;
-            replicationHost.PositionUpdate += ReplicationHost_PositionUpdate;
-            replicationHost.SubscribeStream(StreamName, resumeFrom);
+            _replicationHost.RData += ReplicationHost_RData;
+            _replicationHost.PositionUpdate += ReplicationHost_PositionUpdate;
+
+            SubscribeToStreams();
+            _replicationHost.Connected += ReplicationHost_Connected;
+        }
+
+        private void ReplicationHost_Connected(object sender, EventArgs e)
+        {
+            SubscribeToStreams();
         }
 
         public event EventHandler<T> DataRow;
@@ -83,6 +95,11 @@ namespace Matrix.SynapseInterop.Replication
                 var dataRow = DATA_ROW_FACTORIES[StreamName](row);
                 DataRow?.Invoke(this, (T) dataRow);
             }
+        }
+
+        private void SubscribeToStreams()
+        {
+            _replicationHost.SubscribeStream(StreamName, CurrentPosition);
         }
     }
 }
