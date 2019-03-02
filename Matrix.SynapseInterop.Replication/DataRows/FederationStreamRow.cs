@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using Matrix.SynapseInterop.Replication.Structures;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -8,9 +7,9 @@ namespace Matrix.SynapseInterop.Replication.DataRows
 {
     public class FederationStreamRow : IReplicationDataRow
     {
-        public Dictionary<string[], EduEvent> keyedEdus;
-        public List<EduEvent> edus;
         public List<string> devices;
+        public List<EduEvent> edus;
+        public Dictionary<string[], EduEvent> keyedEdus;
         public List<PresenceState> presence;
 
         private FederationStreamRow()
@@ -24,11 +23,10 @@ namespace Matrix.SynapseInterop.Replication.DataRows
         public static FederationStreamRow FromRaw(string rawDataString)
         {
             var parsed = JsonConvert.DeserializeObject<List<dynamic>>(rawDataString);
-            string typeId = "";
-            FederationStreamRow streamRow = new FederationStreamRow();
+            var typeId = "";
+            var streamRow = new FederationStreamRow();
 
-            for (int i = 0; i < parsed.Count; i++)
-            {
+            for (var i = 0; i < parsed.Count; i++)
                 if (i == 0)
                 {
                     typeId = parsed[0];
@@ -40,7 +38,7 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                         edu_type = parsed[i].edu.edu_type,
                         destination = parsed[i].edu.destination,
                         origin = parsed[i].edu.origin,
-                        content = parsed[i].edu.content,
+                        content = parsed[i].edu.content
                     };
 
                     string[] key = parsed[i].key.ToObject<string[]>();
@@ -57,7 +55,7 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                         edu_type = parsed[i].edu_type,
                         destination = parsed[i].destination,
                         origin = parsed[i].origin,
-                        content = parsed[i].content,
+                        content = parsed[i].content
                     });
                 }
                 else if (typeId == "d") // DeviceRow
@@ -65,7 +63,6 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                     string destination = parsed[i]["destination"].Value;
                     streamRow.devices.Add(destination);
                 }
-            }
 
             return streamRow;
         }

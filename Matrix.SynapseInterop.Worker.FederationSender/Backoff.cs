@@ -15,10 +15,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     public class Backoff
     {
         private const int MaxMilliseconds = 60 * 60 * 24 * 1000;
-        private readonly Dictionary<string, SBackoff> hosts;
-        private readonly Random random;
         private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
+        private readonly Dictionary<string, SBackoff> hosts;
+        private readonly Random random;
 
         public Backoff()
         {
@@ -26,17 +26,20 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             random = new Random();
         }
 
-        public bool ClearBackoff(string host) => hosts.Remove(host);
+        public bool ClearBackoff(string host)
+        {
+            return hosts.Remove(host);
+        }
 
         public TimeSpan GetBackoffForException(string host, Exception ex)
         {
-            double multiplier = (double) random.Next(8, 14) / 10;
+            var multiplier = (double) random.Next(8, 14) / 10;
 
             if (!hosts.TryGetValue(host, out var backoff))
             {
                 backoff = new SBackoff
                 {
-                    delayFor = TimeSpan.Zero,
+                    delayFor = TimeSpan.Zero
                 };
 
                 hosts.Add(host, backoff);
@@ -56,29 +59,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             else if (ex is TransactionFailureException txEx)
             {
-                if (txEx.Code == HttpStatusCode.NotFound)
-                {
-                    backoff.delayFor += HttpReqBackoff * multiplier;
-                }
+                if (txEx.Code == HttpStatusCode.NotFound) backoff.delayFor += HttpReqBackoff * multiplier;
                 else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
-                {
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
-                }
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
-                {
-                    // These usually happen because a remote server didn't like our keys :(
                     backoff.delayFor += NormalBackoff * multiplier;
-                }
                 else if (txEx.Code >= HttpStatusCode.InternalServerError)
-                {
-                    // These just happen, and synapse usually doesn't tell us why.
                     backoff.delayFor += NormalBackoff * multiplier;
-                }
-                else
-                {
-                    // Eh, it's a error.
-                    backoff.delayFor += NormalBackoff * multiplier;
-                }
+                else backoff.delayFor += NormalBackoff * multiplier;
             }
             else
             {

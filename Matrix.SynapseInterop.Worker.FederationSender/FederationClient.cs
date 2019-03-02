@@ -16,15 +16,15 @@ using Serilog;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
-    class FederationClient
+    internal class FederationClient
     {
         private static readonly ILogger log = Log.ForContext<FederationSender>();
-        private SigningKey key;
-        private HttpClient client;
-        private Dictionary<string, Uri> destinationUris;
-        private string origin;
-        private bool allowSelfSigned;
-        private HostResolver hostResolver;
+        private readonly bool allowSelfSigned;
+        private readonly HttpClient client;
+        private readonly Dictionary<string, Uri> destinationUris;
+        private readonly HostResolver hostResolver;
+        private readonly SigningKey key;
+        private readonly string origin;
 
         public FederationClient(string serverName, SigningKey key, IConfigurationSection config)
         {
@@ -32,7 +32,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             client = new HttpClient(new HttpClientHandler
             {
-                ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
+                ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback
             });
 
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -49,20 +49,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                                          SslPolicyErrors sslpolicyerrors
         )
         {
-            if (sslpolicyerrors.HasFlag(SslPolicyErrors.None))
-            {
-                return true;
-            }
+            if (sslpolicyerrors.HasFlag(SslPolicyErrors.None)) return true;
 
             if (
                 sslpolicyerrors.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch) &&
                 sslpolicyerrors.HasFlag(SslPolicyErrors.RemoteCertificateNotAvailable) &&
-                allowSelfSigned)
-            {
-                // XXX: Is this good enough to be considered self signed?
-                // If self signed, then allow.
-                return true;
-            }
+                allowSelfSigned) return true;
 
             return false;
         }
@@ -80,7 +72,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var msg = new HttpRequestMessage
             {
                 Method = HttpMethod.Put,
-                RequestUri = uri.Uri,
+                RequestUri = uri.Uri
             };
 
             msg.Headers.Host = record.GetHost();
@@ -100,7 +92,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             try
             {
                 log.Information("[TX] {destination} PUT {uri} Host={hostHeader} PDUs={pduCount} EDUs={eduCount}"
-                                , transaction.destination, uri, msg.Headers.Host, transaction.pdus.Count, transaction.edus.Count);
+                                , transaction.destination, uri, msg.Headers.Host, transaction.pdus.Count,
+                                transaction.edus.Count);
 
                 sw.Start();
                 resp = await client.SendAsync(msg);
@@ -120,27 +113,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             log.Information("[TX] {destination} Response: {statusCode} {timeTaken}ms",
                             transaction.destination, resp.StatusCode, sw.ElapsedMilliseconds);
 
-            if (resp.IsSuccessStatusCode)
-            {
-                return;
-            }
+            if (resp.IsSuccessStatusCode) return;
 
-            if (resp.StatusCode == HttpStatusCode.NotFound)
-            {
-                destinationUris.Remove(transaction.destination);
-            }
+            if (resp.StatusCode == HttpStatusCode.NotFound) destinationUris.Remove(transaction.destination);
             // TODO: Should we drop well known for other reasons?
 
-            string error = await resp.Content.ReadAsStringAsync();
-            JObject err = JObject.Parse(error);
+            var error = await resp.Content.ReadAsStringAsync();
+            var err = JObject.Parse(error);
 
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                // Possible key fail, show some debug info for people to debug.
                 try
                 {
-                    string errCode = (string) err["errcode"];
-                    string errorString = (string) err["error"];
+                    var errCode = (string) err["errcode"];
+                    var errorString = (string) err["error"];
 
                     if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
                     {
@@ -155,7 +140,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     // ignored
                 }
-            }
 
             throw new TransactionFailureException(transaction.destination, resp.StatusCode, err);
         }
@@ -167,10 +151,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             sigBody[origin].Value<JObject>().Add($"{key.Type}:${key.Name}", key.PublicKey);
             var signingBody = new JObject();
 
-            if (body != null)
-            {
-                signingBody.Add("content", body);
-            }
+            if (body != null) signingBody.Add("content", body);
 
             signingBody.Add("destination", destination);
             signingBody.Add("method", msg.Method.Method.ToUpper());
@@ -180,7 +161,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             signingBody.Add("signatures", new JObject());
             (signingBody["signatures"] as JObject)?.Add(origin, new JObject());
             (signingBody["signatures"][origin] as JObject)?.Add($"{key.Type}:{key.Name}", signature);
-            string authHeader = $"origin={origin},key=\"{key.Type}:{key.Name}\",sig=\"{signature}\"";
+            var authHeader = $"origin={origin},key=\"{key.Type}:{key.Name}\",sig=\"{signature}\"";
 
             msg.Headers.Authorization =
                 new AuthenticationHeaderValue("X-Matrix",

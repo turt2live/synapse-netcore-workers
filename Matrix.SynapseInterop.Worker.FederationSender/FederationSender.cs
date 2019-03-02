@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Database;
-using Matrix.SynapseInterop.Database.Models;
 using Matrix.SynapseInterop.Replication;
 using Matrix.SynapseInterop.Replication.DataRows;
-using Matrix.SynapseInterop.Replication.Structures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.Configuration;
@@ -18,15 +14,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     public class FederationSender
     {
         private static readonly ILogger log = Log.ForContext<FederationSender>();
-        private IConfiguration _config;
-        private int _stream_position;
-        private int _last_ack;
-        private bool _presenceEnabled;
-        private string connectionString;
+        private readonly IConfiguration _config;
         private ReplicationStream<EventStreamRow> _eventStream;
         private ReplicationStream<FederationStreamRow> _fedStream;
+        private int _last_ack;
+        private bool _presenceEnabled;
+        private int _stream_position;
         private SynapseReplication _synapseReplication;
         private TransactionQueue _transactionQueue;
+        private string connectionString;
         private SigningKey key;
 
         public FederationSender(IConfiguration config)
@@ -61,7 +57,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             using (var db = new SynapseDbContext(connectionString))
             {
-                var query = db.FederationStreamPosition.Where((r) => r.Type == type);
+                var query = db.FederationStreamPosition.Where(r => r.Type == type);
                 var res = await query.FirstOrDefaultAsync();
                 return res?.StreamId ?? -1;
             }
@@ -85,18 +81,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             try
             {
-                if (_presenceEnabled && e.presence.Count != 0)
-                {
-                    _transactionQueue.SendPresence(e.presence);
-                }
+                if (_presenceEnabled && e.presence.Count != 0) _transactionQueue.SendPresence(e.presence);
 
                 e.edus.ForEach(_transactionQueue.SendEdu);
 
                 foreach (var keyVal in e.keyedEdus)
-                {
                     _transactionQueue.SendEdu(keyVal.Value,
                                               keyVal.Key.Join(":"));
-                }
 
                 e.devices.ForEach(_transactionQueue.SendDeviceMessages);
                 UpdateToken(int.Parse(_fedStream.CurrentPosition));
@@ -126,10 +117,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             _stream_position = token;
 
-            if (_last_ack >= _stream_position)
-            {
-                return;
-            }
+            if (_last_ack >= _stream_position) return;
 
             UpdateFederationPos("federation", _stream_position);
             _synapseReplication.SendFederationAck(_stream_position.ToString());

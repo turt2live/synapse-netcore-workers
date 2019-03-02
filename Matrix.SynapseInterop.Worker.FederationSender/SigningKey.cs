@@ -10,34 +10,29 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public class SigningKey
     {
-        public readonly string Type;
-        public readonly string Name;
-        public readonly string PublicKey;
-        private readonly KeyPair Pair;
-
         private static readonly JsonSerializerSettings CanonicalSettings = new JsonSerializerSettings
         {
-            Formatting = Formatting.None,
+            Formatting = Formatting.None
         };
+
+        public readonly string Name;
+        private readonly KeyPair Pair;
+        public readonly string PublicKey;
+        public readonly string Type;
 
         public SigningKey(string keyContents)
         {
             var split = keyContents.Split(" ");
 
             if (split.Length != 3)
-            {
                 throw new InvalidDataException("Key file is in the wrong format. Should be '$type $name $key'");
-            }
 
             Type = split[0];
             Name = split[1];
             // Synapse uses unpadded base64, so we need to add our own padding to make this work.
             var b64Seed = split[2].Trim();
 
-            while (b64Seed.Length % 4 != 0)
-            {
-                b64Seed += "=";
-            }
+            while (b64Seed.Length % 4 != 0) b64Seed += "=";
 
             Pair = PublicKeyAuth.GenerateKeyPair(Convert.FromBase64String(b64Seed));
             PublicKey = Convert.ToBase64String(Pair.PublicKey);
@@ -54,8 +49,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             jsonObject.Remove("signatures");
             jsonObject.Remove("unsigned");
             var ordered = SortPropertiesAlphabetically(jsonObject);
-            string json = JsonConvert.SerializeObject(ordered, CanonicalSettings);
-            string b64 = Convert.ToBase64String(PublicKeyAuth.SignDetached(json, Pair.PrivateKey));
+            var json = JsonConvert.SerializeObject(ordered, CanonicalSettings);
+            var b64 = Convert.ToBase64String(PublicKeyAuth.SignDetached(json, Pair.PrivateKey));
             return b64.TrimEnd('=');
         }
 
@@ -80,16 +75,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     var res = new JArray();
 
                     foreach (var jToken in valueArr)
-                    {
                         if (jToken is JObject o)
-                        {
                             res.Add(SortPropertiesAlphabetically(o));
-                        }
                         else
-                        {
                             res.Add(jToken);
-                        }
-                    }
 
                     result.Add(property.Name, res);
                 }

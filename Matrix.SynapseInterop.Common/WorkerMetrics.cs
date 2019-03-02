@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Prometheus;
+﻿using Prometheus;
 
 namespace Matrix.SynapseInterop.Common
 {
@@ -8,7 +6,7 @@ namespace Matrix.SynapseInterop.Common
     {
         private const string PREFIX = "synapse_netcore_worker";
 
-        static readonly Counter TransactionsSent =
+        private static readonly Counter TransactionsSent =
             Metrics.CreateCounter($"{PREFIX}_txns_sent",
                                   "Number of transactions sent",
                                   new CounterConfiguration
@@ -21,7 +19,7 @@ namespace Matrix.SynapseInterop.Common
                                       }
                                   });
 
-        static readonly Counter TransactionEventsSent =
+        private static readonly Counter TransactionEventsSent =
             Metrics.CreateCounter($"{PREFIX}_txn_events_sent",
                                   "Number of transactions sent",
                                   new CounterConfiguration
@@ -34,7 +32,7 @@ namespace Matrix.SynapseInterop.Common
                                       }
                                   });
 
-        static readonly Histogram TransactionDuration =
+        private static readonly Histogram TransactionDuration =
             Metrics.CreateHistogram($"{PREFIX}_txns_duration",
                                     "Time taken to complete a transaction",
                                     new HistogramConfiguration
@@ -46,7 +44,7 @@ namespace Matrix.SynapseInterop.Common
                                             }
                                     });
 
-        static readonly Histogram HostLookupDuration =
+        private static readonly Histogram HostLookupDuration =
             Metrics.CreateHistogram($"{PREFIX}_hostlookup_duration",
                                     "Time taken to complete a host lookup",
                                     new HistogramConfiguration
@@ -58,7 +56,7 @@ namespace Matrix.SynapseInterop.Common
                                             }
                                     });
 
-        static readonly Histogram DbCallDuration =
+        private static readonly Histogram DbCallDuration =
             Metrics.CreateHistogram($"{PREFIX}_db_call_duration",
                                     "Time taken to complete a DB call",
                                     new HistogramConfiguration
@@ -71,7 +69,7 @@ namespace Matrix.SynapseInterop.Common
                                             }
                                     });
 
-        static readonly Gauge OngoingTransactions =
+        private static readonly Gauge OngoingTransactions =
             Metrics.CreateGauge($"{PREFIX}_txn_ongoing",
                                 "How many transactions are currently ongoing",
                                 new GaugeConfiguration
@@ -79,11 +77,11 @@ namespace Matrix.SynapseInterop.Common
                                     LabelNames =
                                         new[]
                                         {
-                                            "instance",
+                                            "instance"
                                         }
                                 });
 
-        static readonly Gauge CacheSize =
+        private static readonly Gauge CacheSize =
             Metrics.CreateGauge($"{PREFIX}_cache_size",
                                 "The size of a given named cache",
                                 new GaugeConfiguration
@@ -96,7 +94,7 @@ namespace Matrix.SynapseInterop.Common
                                         }
                                 });
 
-        static readonly Counter CacheMiss =
+        private static readonly Counter CacheMiss =
             Metrics.CreateCounter($"{PREFIX}_cache_miss",
                                   "Number of requested records that were missed by a named cache",
                                   new CounterConfiguration

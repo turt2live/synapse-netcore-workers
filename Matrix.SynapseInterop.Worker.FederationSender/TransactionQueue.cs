@@ -16,27 +16,26 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public class TransactionQueue
     {
-        private static readonly ILogger log = Log.ForContext<TransactionQueue>();
-        
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
+        private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly FederationClient _client;
-        private Task _presenceProcessing;
-        private Task _eventsProcessing;
-        private SigningKey _signingKey;
-        private readonly string _serverName;
         private readonly string _connString;
-        private int _txnId;
-        private int _lastEventPoke;
-        private object attemptTransactionLock = new object();
-        private Backoff _backoff;
-        private readonly SemaphoreSlim concurrentTransactionLock;
-
-        private readonly Dictionary<string, PresenceState> _userPresence;
+        private readonly Dictionary<string, long> _destLastDeviceListStreamId;
+        private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, Task> _destOngoingTrans;
         private readonly Dictionary<string, Transaction> _destPendingTransactions;
-        private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
-        private readonly Dictionary<string, long> _destLastDeviceListStreamId;
+        private readonly string _serverName;
+
+        private readonly Dictionary<string, PresenceState> _userPresence;
+        private readonly SemaphoreSlim concurrentTransactionLock;
+        private readonly Backoff _backoff;
+        private Task _eventsProcessing;
+        private int _lastEventPoke;
+        private Task _presenceProcessing;
+        private SigningKey _signingKey;
+        private int _txnId;
+        private readonly object attemptTransactionLock = new object();
 
         public TransactionQueue(string serverName,
                                 string connectionString,
@@ -58,12 +57,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _lastEventPoke = -1;
             _signingKey = key;
             _backoff = new Backoff();
-            int txConcurrency = clientConfig.GetValue<int>("maxConcurrency");
+            var txConcurrency = clientConfig.GetValue<int>("maxConcurrency");
 
-            if (txConcurrency == 0)
-            {
-                txConcurrency = 100;
-            }
+            if (txConcurrency == 0) txConcurrency = 100;
 
             concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
         }
@@ -72,59 +68,40 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             _lastEventPoke = Math.Max(int.Parse(streamPos), _lastEventPoke);
 
-            if (!_eventsProcessing.IsCompleted)
-            {
-                return;
-            }
+            if (!_eventsProcessing.IsCompleted) return;
 
             log.Debug("Poking ProcessPendingEvents");
 
-            _eventsProcessing = ProcessPendingEvents().ContinueWith((t) =>
+            _eventsProcessing = ProcessPendingEvents().ContinueWith(t =>
             {
-                if (t.IsFaulted)
-                {
-                    log.Error("Failed to process events: {Exception}", t.Exception);
-                }
+                if (t.IsFaulted) log.Error("Failed to process events: {Exception}", t.Exception);
             });
         }
 
         public void SendPresence(List<PresenceState> presenceSet)
         {
             foreach (var presence in presenceSet)
-            {
                 // Only send presence about our own users.
                 if (IsMineId(presence.user_id))
-                {
                     if (!_userPresence.TryAdd(presence.user_id, presence))
                     {
                         _userPresence.Remove(presence.user_id);
                         _userPresence.Add(presence.user_id, presence);
                     }
-                }
-            }
 
-            if (!_presenceProcessing.IsCompleted)
-            {
-                return;
-            }
+            if (!_presenceProcessing.IsCompleted) return;
 
             _presenceProcessing = ProcessPendingPresence();
         }
 
         public void SendEdu(EduEvent obj)
         {
-            if (obj.destination == _serverName)
-            {
-                return;
-            }
+            if (obj.destination == _serverName) return;
 
             // Prod device messages if we've not seen this destination before.
-            if (!_destLastDeviceMsgStreamId.ContainsKey(obj.destination))
-            {
-                SendDeviceMessages(obj.destination);
-            }
+            if (!_destLastDeviceMsgStreamId.ContainsKey(obj.destination)) SendDeviceMessages(obj.destination);
 
-            Transaction transaction = GetOrCreateTransactionForDest(obj.destination);
+            var transaction = GetOrCreateTransactionForDest(obj.destination);
 
             transaction.edus.Add(obj);
             AttemptTransaction(obj.destination);
@@ -132,13 +109,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public void SendEdu(EduEvent ev, string key)
         {
-            Transaction transaction = GetOrCreateTransactionForDest(ev.destination);
+            var transaction = GetOrCreateTransactionForDest(ev.destination);
             var existingItem = transaction.edus.FindIndex(edu => edu.InternalKey == key);
 
-            if (existingItem >= 0)
-            {
-                transaction.edus.RemoveAt(existingItem);
-            }
+            if (existingItem >= 0) transaction.edus.RemoveAt(existingItem);
 
             ev.InternalKey = key;
             SendEdu(ev);
@@ -146,18 +120,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public void SendDeviceMessages(string destination)
         {
-            if (_serverName == destination)
-            {
-                return; // Obviously.
-            }
+            if (_serverName == destination) return; // Obviously.
 
             // Fetch messages for destination
             var messages = GetNewDeviceMessages(destination);
 
-            if (messages.Item1.Count == 0)
-            {
-                return;
-            }
+            if (messages.Item1.Count == 0) return;
 
             var transaction = GetOrCreateTransactionForDest(destination);
 
@@ -169,7 +137,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     content = JObject.Parse(message.MessagesJson),
                     edu_type = "m.direct_to_device",
                     origin = _serverName,
-                    StreamId = message.StreamId,
+                    StreamId = message.StreamId
                 });
             });
 
@@ -181,7 +149,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     content = JObject.FromObject(list),
                     edu_type = "m.device_list_update",
                     origin = _serverName,
-                    StreamId = list.stream_id,
+                    StreamId = list.stream_id
                 });
             });
 
@@ -190,8 +158,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private Tuple<List<DeviceFederationOutbox>, List<DeviceContentSet>> GetNewDeviceMessages(string destination)
         {
-            long lastMsgId = _destLastDeviceMsgStreamId.GetValueOrDefault(destination, 0);
-            long lastListId = _destLastDeviceListStreamId.GetValueOrDefault(destination, 0);
+            var lastMsgId = _destLastDeviceMsgStreamId.GetValueOrDefault(destination, 0);
+            var lastListId = _destLastDeviceListStreamId.GetValueOrDefault(destination, 0);
 
             using (var db = new SynapseDbContext(_connString))
             {
@@ -221,38 +189,34 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     log.Debug("Sending presence to {host}", host);
                     // TODO: Handle case where we have over 100 EDUs
-                    Transaction transaction = GetOrCreateTransactionForDest(host);
+                    var transaction = GetOrCreateTransactionForDest(host);
 
                     transaction.edus.Add(new EduEvent
                     {
                         destination = host,
                         origin = _serverName,
                         edu_type = "m.presence",
-                        content = formattedPresence,
+                        content = formattedPresence
                     });
                 }
             }
 
             // Do this seperate from the above to batch presence together
             foreach (var hostState in hostsAndState)
-            {
-                foreach (var host in hostState.Key)
-                {
-                    AttemptTransaction(host);
-                }
-            }
+            foreach (var host in hostState.Key)
+                AttemptTransaction(host);
         }
 
         private async Task ProcessPendingEvents()
         {
             List<EventJsonSet> events;
-            int top = _lastEventPoke;
+            var top = _lastEventPoke;
             int last;
 
             // Get the set of events we need to process.
             using (var db = new SynapseDbContext(_connString))
             {
-                last = (await db.FederationStreamPosition.SingleAsync((m) => m.Type == "events")).StreamId;
+                last = (await db.FederationStreamPosition.SingleAsync(m => m.Type == "events")).StreamId;
                 events = db.GetAllNewEventsStream(last, top, MAX_PDUS_PER_TRANSACTION);
             }
 
@@ -284,16 +248,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     // NOTE: This is an event format version, not room version.
                     if (roomEvent.Version == 1)
-                    {
                         pduEv = new PduEventV1
                         {
                             event_id = roomEvent.EventId
                         };
-                    }
                     else // Default to latest event format version.
-                    {
                         pduEv = new PduEventV2();
-                    }
 
                     pduEv.content = roomEvent.Content["content"] as JObject;
                     pduEv.origin = _serverName;
@@ -302,19 +262,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     pduEv.prev_events = roomEvent.Content["prev_events"];
                     pduEv.origin_server_ts = (long) roomEvent.Content["origin_server_ts"];
 
-                    if (roomEvent.Content.ContainsKey("redacts"))
-                    {
-                        pduEv.redacts = (string) roomEvent.Content["redacts"];
-                    }
+                    if (roomEvent.Content.ContainsKey("redacts")) pduEv.redacts = (string) roomEvent.Content["redacts"];
 
                     pduEv.room_id = roomEvent.RoomId;
                     pduEv.sender = roomEvent.Sender;
                     pduEv.prev_state = roomEvent.Content["prev_state"];
 
                     if (roomEvent.Content.ContainsKey("state_key"))
-                    {
                         pduEv.state_key = (string) roomEvent.Content["state_key"];
-                    }
 
                     pduEv.type = (string) roomEvent.Content["type"];
                     pduEv.unsigned = (JObject) roomEvent.Content["unsigned"];
@@ -327,15 +282,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         pduEv.signatures.Add(sigHosts.Key, new Dictionary<string, string>());
 
                         foreach (var sigs in (JObject) sigHosts.Value)
-                        {
                             pduEv.signatures[sigHosts.Key].Add(sigs.Key, sigs.Value.Value<string>());
-                        }
                     }
 
                     //TODO: I guess we need to fetch the destinations for each event in a room, because someone may have got banned in between.
                     foreach (var host in hosts)
                     {
-                        Transaction transaction = GetOrCreateTransactionForDest(host);
+                        var transaction = GetOrCreateTransactionForDest(host);
                         transaction.pdus.Add(pduEv);
                         AttemptTransaction(host);
                     }
@@ -345,7 +298,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             using (var db = new SynapseDbContext(_connString))
             {
                 log.Debug("Saving position {top} to DB", top);
-                var streamPos = db.FederationStreamPosition.First((e) => e.Type == "events");
+                var streamPos = db.FederationStreamPosition.First(e => e.Type == "events");
                 streamPos.StreamId = top;
                 db.SaveChanges();
             }
@@ -365,11 +318,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
-                    if (!_destOngoingTrans[destination].IsCompleted)
-                    {
-                        // Already ongoing.
-                        return;
-                    }
+                    if (!_destOngoingTrans[destination].IsCompleted) return;
 
                     _destOngoingTrans.Remove(destination);
                 }
@@ -410,7 +359,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         log.Warning("Transaction {txnId} {destination} failed: {message}",
                                     currentTransaction.transaction_id, destination, ex.Message);
 
-                        TimeSpan ts = _backoff.GetBackoffForException(destination, ex);
+                        var ts = _backoff.GetBackoffForException(destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
 
@@ -423,9 +372,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
 
                 if (_backoff.ClearBackoff(destination))
-                {
                     log.Information("{destination} has come back online", destination);
-                }
 
                 ClearDeviceMessages(currentTransaction);
                 WorkerMetrics.DecOngoingTransactions();
@@ -480,10 +427,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (deviceListEntries.Any())
                 {
-                    foreach (var msg in deviceListEntries)
-                    {
-                        msg.Sent = true;
-                    }
+                    foreach (var msg in deviceListEntries) msg.Sent = true;
 
                     db.SaveChanges();
                 }
@@ -506,26 +450,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             obj.Add("presence", state.state);
             obj.Add("user_id", state.user_id);
 
-            if (state.last_active_ts != 0)
-            {
-                obj.Add("last_active_ago", (int) Math.Round(now - state.last_active_ts));
-            }
+            if (state.last_active_ts != 0) obj.Add("last_active_ago", (int) Math.Round(now - state.last_active_ts));
 
-            if (state.status_msg != null && state.state != "offline")
-            {
-                obj.Add("status_msg", state.status_msg);
-            }
+            if (state.status_msg != null && state.state != "offline") obj.Add("status_msg", state.status_msg);
 
-            if (state.state == "online")
-            {
-                obj.Add("currently_active", state.currently_active);
-            }
+            if (state.state == "online") obj.Add("currently_active", state.currently_active);
 
             return obj;
         }
 
         /// <summary>
-        /// Get a set of remote hosts interested in this presence.
+        ///     Get a set of remote hosts interested in this presence.
         /// </summary>
         private async Task<Dictionary<string[], PresenceState>> GetInterestedRemotes(List<PresenceState> presenceSet)
         {
@@ -548,14 +483,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     // XXX: This is NOT the way to do this, but functions well enough
                     // for a demo.
                     foreach (var roomId in membershipList.ConvertAll(m => m.RoomId))
-                    {
                         await db.RoomMemberships
                                 .Where(m => m.RoomId == roomId)
                                 .ForEachAsync(m =>
                                                   hosts.Add(m.UserId
                                                              .Split(":")
                                                               [1]));
-                    }
 
                     // Never include ourselves
                     hosts.Remove(_serverName);
@@ -569,12 +502,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private async Task<HashSet<string>> GetHostsInRoom(string roomId)
         {
-            HashSet<string> hosts = new HashSet<string>();
+            var hosts = new HashSet<string>();
 
             using (var db = new SynapseDbContext(_connString))
             {
                 await db.RoomMemberships.Where(m => m.RoomId == roomId)
-                        .ForEachAsync((m) =>
+                        .ForEachAsync(m =>
                                           hosts.Add(m.UserId.Split(":")[1]));
             }
 

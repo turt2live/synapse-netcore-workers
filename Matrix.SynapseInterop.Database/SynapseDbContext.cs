@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database.Models;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +9,7 @@ namespace Matrix.SynapseInterop.Database
 {
     public class SynapseDbContext : DbContext
     {
+        private readonly string _connString;
         public DbQuery<EventJson> EventsJson { get; set; }
         private DbQuery<Event> Events { get; set; }
 
@@ -20,8 +20,6 @@ namespace Matrix.SynapseInterop.Database
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
-
-        private readonly string _connString;
 
         public SynapseDbContext(string connectionString)
         {
@@ -37,19 +35,19 @@ namespace Matrix.SynapseInterop.Database
         {
             using (WorkerMetrics.DbCallTimer("GetNewDevicesForDestination"))
             {
-                List<DeviceContentSet> set = new List<DeviceContentSet>();
+                var set = new List<DeviceContentSet>();
 
                 foreach (var devicePoke in DeviceListsOutboundPokes
                                           .Where(poke => poke.Destination == destination && poke.Sent == false)
                                           .Take(limit)
                                           .OrderBy(poke => poke.StreamId).ToList())
                 {
-                    DeviceContentSet contentSet = new DeviceContentSet
+                    var contentSet = new DeviceContentSet
                     {
                         device_id = devicePoke.DeviceId,
                         stream_id = devicePoke.StreamId,
                         user_id = devicePoke.UserId,
-                        deleted = false,
+                        deleted = false
                     };
 
                     var json = E2EDeviceKeysJson
@@ -74,12 +72,12 @@ namespace Matrix.SynapseInterop.Database
         {
             using (WorkerMetrics.DbCallTimer("GetAllNewEventsStream"))
             {
-                List<EventJsonSet> set = new List<EventJsonSet>();
+                var set = new List<EventJsonSet>();
 
                 foreach (var ev in Events
                                   .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
                                   .Take(limit)
-                                  .OrderBy((e) => e.StreamOrdering).ToList())
+                                  .OrderBy(e => e.StreamOrdering).ToList())
                 {
                     var js = EventsJson.SingleOrDefault(e => e.EventId == ev.EventId);
 

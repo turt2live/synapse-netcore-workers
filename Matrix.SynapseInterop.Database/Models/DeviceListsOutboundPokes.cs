@@ -6,7 +6,8 @@ namespace Matrix.SynapseInterop.Database.Models
     [Table("device_lists_outbound_pokes")]
     public class DeviceListsOutboundPokes
     {
-        [Column("stream_id"), Key]
+        [Column("stream_id")]
+        [Key]
         public int StreamId { get; set; }
 
         [Column("user_id")]

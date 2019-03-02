@@ -13,7 +13,8 @@ namespace Matrix.SynapseInterop.Replication
 {
     public class SynapseReplication
     {
-        private static readonly ILogger log = Log.ForContext<SynapseReplication>(); 
+        private static readonly ILogger log = Log.ForContext<SynapseReplication>();
+
         private readonly Dictionary<string, ReplicationData>
             _pendingBatches = new Dictionary<string, ReplicationData>();
 
@@ -204,7 +205,7 @@ namespace Matrix.SynapseInterop.Replication
 
         public void SendRaw(string command)
         {
-            string shortCommand = command.Length > 80 ? command.Substring(0, 80) : command;
+            var shortCommand = command.Length > 80 ? command.Substring(0, 80) : command;
             log.Information($"Sending {shortCommand}");
 
             try

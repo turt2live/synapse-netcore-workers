@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Security;
 using Matrix.SynapseInterop.Replication.Structures;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -51,6 +50,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
     public class PduEventV1 : IPduEvent
     {
+        public string event_id { get; set; }
         public string room_id { get; set; }
         public string sender { get; set; }
         public string origin { get; set; }
@@ -63,7 +63,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public JToken auth_events { get; set; }
         public string redacts { get; set; }
         public JObject unsigned { get; set; }
-        public string event_id { get; set; }
         public JToken hashes { get; set; }
         public Dictionary<string, Dictionary<string, string>> signatures { get; set; }
         public JToken prev_state { get; set; }

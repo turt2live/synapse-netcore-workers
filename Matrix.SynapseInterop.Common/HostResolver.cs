@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Net.Sockets;
 using System.Threading.Tasks;
 using DnsClient;
 using DnsClient.Protocol;
@@ -16,11 +12,13 @@ namespace Matrix.SynapseInterop.Common
     public class HostRecord
     {
         private static readonly TimeSpan TTL = TimeSpan.FromDays(1);
-        private Uri _resolvedUri;
         private readonly string _host;
+
+        private readonly SrvRecord[] _entries;
+        private readonly Uri _resolvedUri;
         public DateTime LastAccessed;
 
-        private SrvRecord[] _entries;
+        public bool Expired => DateTime.Now - LastAccessed > TTL;
 
         public HostRecord(Uri uri, SrvRecord[] entries, string host)
         {
@@ -38,31 +36,22 @@ namespace Matrix.SynapseInterop.Common
 
         public string GetHost()
         {
-            if (_entries != null)
-            {
-                // This is spawned from a SRV record, use the destination.
-                return _host;
-            }
+            if (_entries != null) return _host;
 
             return _resolvedUri.Host;
         }
-
-        public bool Expired => (DateTime.Now - LastAccessed) > TTL;
     }
 
     public class HostResolver
     {
-        private readonly Dictionary<string, HostRecord> _hosts;
         private readonly int _defaultPort;
-        private readonly HttpClient _wKclient;
+        private readonly Dictionary<string, HostRecord> _hosts;
         private readonly LookupClient _lookupClient;
+        private readonly HttpClient _wKclient;
 
         public HostResolver(int defaultPort)
         {
-            _wKclient = new HttpClient(new HttpClientHandler
-            {
-                // ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
-            }) {Timeout = TimeSpan.FromSeconds(15)};
+            _wKclient = new HttpClient(new HttpClientHandler()) {Timeout = TimeSpan.FromSeconds(15)};
 
             _hosts = new Dictionary<string, HostRecord>();
             _defaultPort = defaultPort;
@@ -71,20 +60,14 @@ namespace Matrix.SynapseInterop.Common
 
         public async Task<HostRecord> GetHostRecord(string destination)
         {
-            bool hasValue = _hosts.TryGetValue(destination, out var host);
-            bool expired = hasValue && host.Expired;
+            var hasValue = _hosts.TryGetValue(destination, out var host);
+            var expired = hasValue && host.Expired;
 
-            if (hasValue && !expired)
-            {
-                return host;
-            }
+            if (hasValue && !expired) return host;
 
             WorkerMetrics.ReportCacheMiss("hostresolver_hosts");
 
-            if (expired)
-            {
-                _hosts.Remove(destination);
-            }
+            if (expired) _hosts.Remove(destination);
 
             using (WorkerMetrics.HostLookupDurationTimer())
             {
@@ -102,15 +85,11 @@ namespace Matrix.SynapseInterop.Common
         {
             // https://matrix.org/docs/spec/server_server/r0.1.0.html#resolving-server-names
             if (TryHandleBasicHost(destination, out var basicHost))
-            {
                 return Tuple.Create<Uri, SrvRecord[]>(basicHost, null);
-            }
 
             var rawUri = CreateHostUri(destination);
 
             if (rawUri.HostNameType == UriHostNameType.Dns)
-            {
-                // 3. If the hostname is not an IP literal, a regular HTTPS request is made to https://<hostname>/.well-known/matrix/server
                 try
                 {
                     var res = await _wKclient.GetAsync($"https://{destination}/.well-known/matrix/server");
@@ -118,17 +97,12 @@ namespace Matrix.SynapseInterop.Common
 
                     var wellKnown = JObject.Parse(await res.Content.ReadAsStringAsync());
 
-                    if (!wellKnown.ContainsKey("m.server"))
-                    {
-                        throw new Exception("No m.server key found");
-                    }
+                    if (!wellKnown.ContainsKey("m.server")) throw new Exception("No m.server key found");
 
                     var wellKnownHost = wellKnown["m.server"].ToObject<string>();
 
                     if (TryHandleBasicHost(wellKnownHost, out var wellKnownBasicHost))
-                    {
                         return Tuple.Create<Uri, SrvRecord[]>(wellKnownBasicHost, null);
-                    }
 
                     // Well-known is valid but wasn't "basic", resolve it's DNS
                     rawUri = CreateHostUri(wellKnownHost);
@@ -137,7 +111,6 @@ namespace Matrix.SynapseInterop.Common
                 {
                     // ignored - Failures to resolve well known should fall through.
                 }
-            }
 
             // Do the DNS
             var result = await _lookupClient
@@ -145,11 +118,7 @@ namespace Matrix.SynapseInterop.Common
 
             var records = result.Answers.Where(r => r is SrvRecord).Cast<SrvRecord>().ToArray();
 
-            if (result.HasError || records.Length == 0)
-            {
-                // No records, attempt to resolve the host directly.
-                return Tuple.Create<Uri, SrvRecord[]>(rawUri, null);
-            }
+            if (result.HasError || records.Length == 0) return Tuple.Create<Uri, SrvRecord[]>(rawUri, null);
 
             rawUri = CreateHostUri($"{records[0].Target.Value}:{records[0].Port}");
 
