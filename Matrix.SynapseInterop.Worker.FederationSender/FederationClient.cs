@@ -12,11 +12,13 @@ using Matrix.SynapseInterop.Common;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     class FederationClient
     {
+        private static readonly ILogger log = Log.ForContext<FederationSender>();
         private SigningKey key;
         private HttpClient client;
         private Dictionary<string, Uri> destinationUris;
@@ -97,14 +99,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             try
             {
-                Console.WriteLine($"[TX] {transaction.destination} PUT {uri} Host={msg.Headers.Host} PDUs={transaction.pdus.Count} EDUs={transaction.edus.Count}");
+                log.Information("[TX] {destination} PUT {uri} Host={hostHeader} PDUs={pduCount} EDUs={eduCount}"
+                                , transaction.destination, uri, msg.Headers.Host, transaction.pdus.Count, transaction.edus.Count);
+
                 sw.Start();
                 resp = await client.SendAsync(msg);
             }
             catch (HttpRequestException ex)
             {
                 //TODO: This is probably a little extreme.
-                Console.WriteLine($"Failed to reach {transaction.destination} {ex.Message}");
+                log.Warning("Failed to reach {destination} {message}", transaction.destination, ex.Message);
                 destinationUris.Remove(transaction.destination);
                 throw;
             }
@@ -112,8 +116,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 sw.Stop();
             }
-            
-            Console.WriteLine($"[TX] {transaction.destination} Response: {resp.StatusCode} {sw.ElapsedMilliseconds}ms");
+
+            log.Information("[TX] {destination} Response: {statusCode} {timeTaken}ms",
+                            transaction.destination, resp.StatusCode, sw.ElapsedMilliseconds);
 
             if (resp.IsSuccessStatusCode)
             {
@@ -139,11 +144,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
                     {
-                        Console.WriteLine("Got invalid signature, debug info:");
+                        log.Information("Got invalid signature, debug info:");
 
-                        Console.WriteLine("Auth: {0}\nBody: ${1}",
-                                          msg.Headers.Authorization.Parameter,
-                                          body.ToString(Formatting.Indented));
+                        log.Information("Auth: {auth}\nBody: {body}",
+                                        msg.Headers.Authorization.Parameter,
+                                        body.ToString(Formatting.Indented));
                     }
                 }
                 catch

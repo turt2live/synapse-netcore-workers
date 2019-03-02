@@ -43,6 +43,7 @@ namespace Matrix.SynapseInterop.Common
                 // This is spawned from a SRV record, use the destination.
                 return _host;
             }
+
             return _resolvedUri.Host;
         }
 
@@ -79,7 +80,7 @@ namespace Matrix.SynapseInterop.Common
             }
 
             WorkerMetrics.ReportCacheMiss("hostresolver_hosts");
-            
+
             if (expired)
             {
                 _hosts.Remove(destination);
@@ -91,7 +92,7 @@ namespace Matrix.SynapseInterop.Common
                 host = new HostRecord(res.Item1, res.Item2, destination);
                 _hosts.Add(destination, host);
             }
-            
+
             WorkerMetrics.ReportCacheSize("hostresolver_hosts", _hosts.Count);
 
             return host;
