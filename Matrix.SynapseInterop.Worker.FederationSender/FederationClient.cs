@@ -17,6 +17,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private SigningKey key;
         private HttpClient client;
+        private HttpClient wKclient;
         private Dictionary<string, Uri> destinationUris;
         private string origin;
         private bool allowSelfSigned;
@@ -30,6 +31,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
             });
+
+            client.Timeout = TimeSpan.FromSeconds(30);
+            
+            wKclient = new HttpClient(new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback,
+            });
+
+            wKclient.Timeout = TimeSpan.FromSeconds(15);
 
             this.key = key;
             destinationUris = new Dictionary<string, Uri>();
@@ -65,7 +75,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var msg = new HttpRequestMessage
             {
                 Method = HttpMethod.Put,
-                RequestUri = uri.Uri
+                RequestUri = uri.Uri,
             };
 
             var body = SigningKey.SortPropertiesAlphabetically(JObject.FromObject(transaction));
@@ -179,7 +189,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Try well known
             try
             {
-                var res = await client.GetAsync($"https://{destination}/.well-known/matrix/server");
+                var res = await wKclient.GetAsync($"https://{destination}/.well-known/matrix/server");
                 res.EnsureSuccessStatusCode();
                 
                 var wellKnown = JObject.Parse(await res.Content.ReadAsStringAsync());
