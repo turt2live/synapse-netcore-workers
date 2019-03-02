@@ -16,6 +16,7 @@ namespace Matrix.SynapseInterop.Common
     {
         private static readonly TimeSpan TTL = TimeSpan.FromDays(1);
         private Uri _resolvedUri;
+        private readonly string _host;
         public DateTime LastAccessed;
 
         private ServiceHostEntry[] _entries;
@@ -31,6 +32,16 @@ namespace Matrix.SynapseInterop.Common
         {
             // TODO: Load balance
             return _resolvedUri;
+        }
+
+        public string GetHost()
+        {
+            if (_entries != null)
+            {
+                // This is spawned from a SRV record, use the destination.
+                return _host;
+            }
+            return _resolvedUri.Host;
         }
 
         public bool Expired => (DateTime.Now - LastAccessed) > TTL;
@@ -55,14 +66,14 @@ namespace Matrix.SynapseInterop.Common
             _lookupClient = new LookupClient();
         }
 
-        public async Task<Uri> GetUriForHost(string destination)
+        public async Task<HostRecord> GetHostRecord(string destination)
         {
             bool hasValue = _hosts.TryGetValue(destination, out var host);
             bool expired = hasValue && host.Expired;
 
             if (hasValue && !expired)
             {
-                return host.GetUri();
+                return host;
             }
 
             WorkerMetrics.ReportCacheMiss("hostresolver_hosts");
@@ -81,7 +92,7 @@ namespace Matrix.SynapseInterop.Common
             
             WorkerMetrics.ReportCacheSize("hostresolver_hosts", _hosts.Count);
 
-            return host.GetUri();
+            return host;
         }
 
         private async Task<Tuple<Uri, ServiceHostEntry[]>> ResolveHost(string destination)
@@ -134,7 +145,9 @@ namespace Matrix.SynapseInterop.Common
                 return Tuple.Create<Uri, ServiceHostEntry[]>(rawUri, null);
             }
 
-            rawUri = CreateHostUri($"{dnsRes[0].HostName}:{dnsRes[0].Port}");
+            var host = dnsRes[0].HostName ?? rawUri.Host;
+            
+            rawUri = CreateHostUri($"{host}:{dnsRes[0].Port}");
 
             return Tuple.Create(rawUri, dnsRes);
         }

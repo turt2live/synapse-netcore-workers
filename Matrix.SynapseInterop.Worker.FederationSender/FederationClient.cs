@@ -66,18 +66,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public async Task SendTransaction(Transaction transaction)
         {
-            var uri = new UriBuilder(await hostResolver.GetUriForHost(transaction.destination))
+            var record = await hostResolver.GetHostRecord(transaction.destination);
+
+            var uri = new UriBuilder(record.GetUri())
             {
                 Path = $"/_matrix/federation/v1/send/{transaction.transaction_id}/",
                 Scheme = "https"
             };
-
 
             var msg = new HttpRequestMessage
             {
                 Method = HttpMethod.Put,
                 RequestUri = uri.Uri,
             };
+
+            msg.Headers.Host = record.GetHost();
 
             var body = SigningKey.SortPropertiesAlphabetically(JObject.FromObject(transaction));
             SignRequest(msg, transaction.destination, body);
