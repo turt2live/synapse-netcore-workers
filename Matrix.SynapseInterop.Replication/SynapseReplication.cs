@@ -36,8 +36,17 @@ namespace Matrix.SynapseInterop.Replication
 
             // Resolve the address
             var dns = await Dns.GetHostEntryAsync(address);
-            var ip = dns.AddressList[0];
-
+            IPAddress ip;
+            try
+            {
+                // TcpClient doesn't support IPV6 :(
+                ip = dns.AddressList.First(i => i.AddressFamily == AddressFamily.InterNetwork);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new InvalidOperationException($"No IPv4 address found for {address}", ex);
+            }
+            
             // Form a connection
             _client = new TcpClient();
             await _client.ConnectAsync(ip, port);
