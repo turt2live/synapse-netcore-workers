@@ -233,10 +233,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             log.Information("Processing from {last} to {top}", last, top);
-            // Skip any events that didn't come from us.
-            var roomEvents = events.SkipWhile(e => !IsMineId(e.Sender)).GroupBy(e => e.RoomId);
 
-            foreach (var item in roomEvents)
+            // Skip any events that didn't come from us.
+            foreach (var item in events.Where(e => IsMineId(e.Sender)).GroupBy(e => e.RoomId))
             {
                 var hosts = await GetHostsInRoom(item.Key);
 
