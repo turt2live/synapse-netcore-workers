@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using Matrix.SynapseInterop.Common;
-﻿using Matrix.SynapseInterop.Database.SynapseModels;
+using Matrix.SynapseInterop.Database.SynapseModels;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 

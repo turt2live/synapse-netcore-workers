@@ -5,14 +5,15 @@ namespace Matrix.SynapseInterop.Database
 {
     public class WorkerDbContext : DbContext
     {
-        private readonly string _connString;
-        // TODO: Migrations of some kind
+        // We need to define a connection string for EF Core migrations to work
+        private readonly string _connString =
+            "Username=worker_user;Password=YourPasswordHere;Host=localhost;Database=dont_use_synapse;";
 
-        public DbQuery<Appservice> Appservices { get; set; }
+        public DbSet<Appservice> Appservices { get; set; }
 
         public WorkerDbContext(string connectionString)
         {
-            _connString = connectionString;
+            if (!string.IsNullOrWhiteSpace(connectionString)) _connString = connectionString;
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

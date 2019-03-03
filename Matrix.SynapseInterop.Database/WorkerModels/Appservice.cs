@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Matrix.SynapseInterop.Database.WorkerModels
 {
@@ -7,6 +8,7 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
     {
         // TODO: Namespace support
 
+        [Key]
         [Column("id")]
         public string Id { get; set; }
 
@@ -20,7 +22,7 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
         public string HomeserverToken { get; set; }
 
         [Column("url")]
-        public string Url { get; set; }
+        public string Url { get; set; } // Nullable
 
         [Column("sender_localpart")]
         public string SenderLocalpart { get; set; }

@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using Routable;
-using ILogger = Routable.ILogger;
 
 namespace Matrix.SynapseInterop.Common
 {
     public class RoutableSerilogLogger : ILogger
     {
-        private Serilog.ILogger _logger;
+        private readonly Serilog.ILogger _logger;
 
         public RoutableSerilogLogger(Serilog.ILogger logger)
         {

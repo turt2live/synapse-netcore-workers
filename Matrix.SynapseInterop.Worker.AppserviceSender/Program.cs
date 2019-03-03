@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Net;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Worker.AppserviceSender.Controllers;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using Routable;
@@ -17,7 +18,7 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
         private static ILogger log;
         private static IConfiguration _config;
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             Console.WriteLine("Starting appservice sender...");
 
@@ -30,8 +31,16 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
 
             Logger.Setup(_config.GetSection("Logging"));
             log = Log.ForContext<Program>();
+
+            log.Information("Connecting to database and running migrations...");
             AppserviceDb.ConnectionString = _config.GetConnectionString("appserviceWorker");
 
+            using (var context = new AppserviceDb())
+            {
+                context.Database.Migrate();
+            }
+
+            log.Information("Setting up Kestrel...");
             var kestrelConfig = _config.GetSection("Kestrel");
 
             var host = new WebHostBuilder()
