@@ -1,5 +1,8 @@
-﻿using System.Text.RegularExpressions;
-using Newtonsoft.Json.Linq;
+﻿using System.Linq;
+using System.Text.RegularExpressions;
+using Matrix.SynapseInterop.Common.Extensions;
+using Matrix.SynapseInterop.Database.WorkerModels;
+using Matrix.SynapseInterop.Worker.AppserviceSender.Dto;
 using Routable;
 using Routable.Kestrel;
 
@@ -22,28 +25,11 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
                                        KestrelRoutableResponse resp
         )
         {
-            resp.ContentType = "application/json";
-
-            resp.Write(JObject.FromObject(new
+            using (var db = new AppserviceDb())
             {
-                TestAppservice = new
-                {
-                    enabled = true,
-                    as_token = "sample_as_token",
-                    hs_token = "sample_hs_token",
-                    url = "http://localhost:9000",
-                    sender_localpart = "_example",
-                    namespaces = new
-                    {
-                        users = new object[]
-                        {
-                            new {exclusive = true, regex = "@_example.*"}
-                        },
-                        aliases = new object[0],
-                        rooms = new object[0]
-                    }
-                }
-            }));
+                var appservices = db.Appservices.ToDictionary(a => a.Id, a => new AppserviceDto(a));
+                resp.WriteJson(appservices);
+            }
 
             return true;
         }
@@ -53,30 +39,36 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
                                         KestrelRoutableResponse resp
         )
         {
-            resp.ContentType = "application/json";
+            var appserviceId = req.Parameters["appserviceId"].ToString();
+            var dto = req.AsJson<AppserviceDto>();
 
-            resp.Write(JObject.FromObject(new
+            using (var db = new AppserviceDb())
             {
-                TestAppservice = new
+                var appservice = db.Appservices.Find(appserviceId);
+
+                if (appservice != null)
                 {
-                    enabled = true,
-                    id = req.Parameters["appserviceId"],
-                    //body = req.Body,
-                    as_token = "sample_as_token",
-                    hs_token = "sample_hs_token",
-                    url = "http://localhost:9000",
-                    sender_localpart = "_example",
-                    namespaces = new
-                    {
-                        users = new object[]
-                        {
-                            new {exclusive = true, regex = "@_example.*"}
-                        },
-                        aliases = new object[0],
-                        rooms = new object[0]
-                    }
+                    appservice.Enabled = dto.Enabled;
+                    appservice.AppserviceToken = dto.AsToken;
+                    appservice.HomeserverToken = dto.HsToken;
+                    appservice.Url = dto.Url;
+                    appservice.SenderLocalpart = dto.SenderLocalpart;
                 }
-            }));
+                else
+                {
+                    appservice = new Appservice(appserviceId);
+                    appservice.Enabled = dto.Enabled;
+                    appservice.AppserviceToken = dto.AsToken;
+                    appservice.HomeserverToken = dto.HsToken;
+                    appservice.Url = dto.Url;
+                    appservice.SenderLocalpart = dto.SenderLocalpart;
+
+                    db.Appservices.Add(appservice);
+                }
+
+                db.SaveChanges();
+                resp.WriteJson(new AppserviceDto(appservice));
+            }
 
             return true;
         }

@@ -10,7 +10,7 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
 
         [Key]
         [Column("id")]
-        public string Id { get; set; }
+        public string Id { get; protected set; }
 
         [Column("enabled")]
         public bool Enabled { get; set; }
@@ -29,5 +29,12 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
 
         [Column("metadata")]
         public string Metadata { get; set; }
+
+        protected Appservice() { } // For EntityFramework
+
+        public Appservice(string id)
+        {
+            Id = id;
+        }
     }
 }
