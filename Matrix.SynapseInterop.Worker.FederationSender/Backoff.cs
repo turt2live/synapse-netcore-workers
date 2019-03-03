@@ -63,7 +63,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
-                    backoff.delayFor += NormalBackoff * multiplier;
+                    // This is because the body is mangled and will never succeed, drop it.
+                    return TimeSpan.Zero;
                 else if (txEx.Code >= HttpStatusCode.InternalServerError)
                     backoff.delayFor += NormalBackoff * multiplier;
                 else backoff.delayFor += NormalBackoff * multiplier;

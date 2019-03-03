@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
@@ -233,10 +234,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             log.Information("Processing from {last} to {top}", last, top);
-            // Skip any events that didn't come from us.
-            var roomEvents = events.SkipWhile(e => !IsMineId(e.Sender)).GroupBy(e => e.RoomId);
 
-            foreach (var item in roomEvents)
+            // Skip any events that didn't come from us.
+            foreach (var item in events.Where(e => IsMineId(e.Sender)).GroupBy(e => e.RoomId))
             {
                 var hosts = await GetHostsInRoom(item.Key);
 
@@ -362,12 +362,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         var ts = _backoff.GetBackoffForException(destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
+                        // Some transactions cannot be retried.
+                        if (ts != TimeSpan.Zero)
+                        {
+                            log.Information("Retrying txn {txnId} in {secs}s",
+                                            currentTransaction.transaction_id, ts.TotalSeconds);
 
-                        log.Information("Retrying txn {txnId} in {secs}s",
-                                        currentTransaction.transaction_id, ts.TotalSeconds);
-
-                        await Task.Delay((int) ts.TotalMilliseconds);
-                        continue;
+                            await Task.Delay((int) ts.TotalMilliseconds);
+                            continue;
+                        }
                     }
                 }
 
