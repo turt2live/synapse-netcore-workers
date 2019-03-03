@@ -4,6 +4,7 @@ WORKDIR /app
 ENV WORKER=Matrix.SynapseInterop.Worker.DevWorker
 
 COPY ${WORKER}/ ${WORKER}/
+COPY Matrix.SynapseInterop.Common/ Matrix.SynapseInterop.Common/
 COPY Matrix.SynapseInterop.Database/ Matrix.SynapseInterop.Database/
 COPY Matrix.SynapseInterop.Replication/ Matrix.SynapseInterop.Replication/
 RUN dotnet restore ${WORKER}/${WORKER}.csproj

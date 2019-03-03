@@ -1,23 +1,30 @@
 ﻿using System;
 using System.Linq;
+using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Replication;
 using Matrix.SynapseInterop.Replication.DataRows;
 using Microsoft.Extensions.Configuration;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Worker.DevWorker
 {
     internal class Program
     {
+        private static ILogger log;
         private static IConfiguration _config;
 
         private static void Main(string[] args)
         {
             _config = new ConfigurationBuilder()
+                     .AddJsonFile("appsettings.default.json", true, true)
                      .AddJsonFile("appsettings.json", true, true)
                      .AddEnvironmentVariables()
                      .AddCommandLine(args)
                      .Build();
+
+            Logger.Setup(_config.GetSection("Logging"));
+            log = Log.ForContext<Program>();
 
             StartReplicationAsync();
 
@@ -43,19 +50,19 @@ namespace Matrix.SynapseInterop.Worker.DevWorker
         {
             using (var db = new SynapseDbContext(_config.GetConnectionString("synapse")))
             {
-                Console.WriteLine("Received event {0} ({1}) in {2}", e.EventId, e.EventType, e.RoomId);
+                log.Information("Received event {0} ({1}) in {2}", e.EventId, e.EventType, e.RoomId);
                 var ev = db.EventsJson.SingleOrDefault(e2 => e2.RoomId == e.RoomId && e2.EventId == e.EventId);
 
                 if (ev != null)
-                    Console.WriteLine(ev.Json);
+                    log.Information(ev.Json);
                 else
-                    Console.WriteLine("EVENT NOT FOUND");
+                    log.Error("EVENT NOT FOUND");
             }
         }
 
         private static void Replication_ServerName(object sender, string e)
         {
-            Console.WriteLine("Server name: " + e);
+            log.Information("Server name: " + e);
         }
     }
 }

@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Threading;
 using Matrix.SynapseInterop.Common;
 using Microsoft.Extensions.Configuration;
-using Serilog;
-using Serilog.Events;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
@@ -14,21 +11,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private static void Main(string[] args)
         {
             _config = new ConfigurationBuilder()
+                     .AddJsonFile("appsettings.default.json", true, true)
                      .AddJsonFile("appsettings.json", true, true)
                      .AddEnvironmentVariables()
                      .AddCommandLine(args)
                      .Build();
 
-            var logConfig = _config.GetSection("Logging");
-
-            if (!Enum.TryParse(logConfig.GetValue<string>("level"), out LogEventLevel level))
-                level = LogEventLevel.Information;
-
-            Log.Logger = new LoggerConfiguration().Filter
-                                                  .ByIncludingOnly(e => e.Level >= level)
-                                                  .WriteTo.Console(outputTemplate:
-                                                                   "{Timestamp:yy-MM-dd HH:mm:ss.fff} {Level:u3} {SourceContext:lj} {Message:lj}{NewLine}{Exception}")
-                                                  .CreateLogger();
+            Logger.Setup(_config.GetSection("Logging"));
 
             var metricConfig = _config.GetSection("Metrics");
 
@@ -38,7 +27,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                            metricConfig.GetValue<string>("bindHost"));
 
             new FederationSender(_config).Start().Wait();
-            Thread.Sleep(-1);
+
+            Console.ReadKey(true);
         }
     }
 }
