@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database;
-using Matrix.SynapseInterop.Database.Models;
+using Matrix.SynapseInterop.Database.SynapseModels;
 using Matrix.SynapseInterop.Replication.Structures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

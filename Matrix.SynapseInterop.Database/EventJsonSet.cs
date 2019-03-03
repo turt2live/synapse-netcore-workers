@@ -1,4 +1,4 @@
-﻿using Matrix.SynapseInterop.Database.Models;
+﻿using Matrix.SynapseInterop.Database.SynapseModels;
 using Newtonsoft.Json.Linq;
 
 namespace Matrix.SynapseInterop.Database

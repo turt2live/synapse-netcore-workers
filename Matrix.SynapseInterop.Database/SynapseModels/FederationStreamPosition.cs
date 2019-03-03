@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Matrix.SynapseInterop.Database.Models
+namespace Matrix.SynapseInterop.Database.SynapseModels
 {
     [Table("federation_stream_position")]
     public class FederationStreamPosition

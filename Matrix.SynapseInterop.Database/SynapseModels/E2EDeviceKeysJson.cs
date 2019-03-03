@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Matrix.SynapseInterop.Database.Models
+namespace Matrix.SynapseInterop.Database.SynapseModels
 {
     [Table("e2e_device_keys_json")]
     public class E2EDeviceKeysJson
