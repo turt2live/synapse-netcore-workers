@@ -13,6 +13,8 @@ namespace Matrix.SynapseInterop.Common
                 level = LogEventLevel.Information;
 
             Log.Logger = new LoggerConfiguration()
+                        .MinimumLevel.Debug()
+                        .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                         .Filter
                         .ByIncludingOnly(e => e.Level >= level)
                         .WriteTo
