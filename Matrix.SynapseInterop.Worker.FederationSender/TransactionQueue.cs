@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -25,8 +26,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _connString;
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
-        private readonly Dictionary<string, Task> _destOngoingTrans;
-        private readonly Dictionary<string, LinkedList<Transaction>> _destPendingTransactions;
+        private readonly ConcurrentDictionary<string, Task> _destOngoingTrans;
+        private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
