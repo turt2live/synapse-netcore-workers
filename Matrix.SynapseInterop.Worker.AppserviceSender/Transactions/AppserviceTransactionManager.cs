@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common.Transactions;
 using Matrix.SynapseInterop.Database.WorkerModels;
@@ -28,16 +29,19 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
 
             _sendLoop = Task.Run(() =>
             {
-                while (_sendingTransactions)
+                lock (this)
                 {
-                    // TODO: Proper notification of pending transactions
-                    var txnToSend = GetTransactionToSend();
-
-                    if (txnToSend != null)
+                    while (_sendingTransactions)
                     {
-                        _logger.Information("Got txn to send with {0} events", txnToSend.Elements.Count);
-                        _logger.Information("Flagging txn as sent");
-                        FlagSent(txnToSend);
+                        Monitor.Wait(this);
+                        var txnToSend = GetTransactionToSend();
+
+                        if (txnToSend != null)
+                        {
+                            _logger.Information("Got txn to send with {0} events", txnToSend.Elements.Count);
+                            _logger.Information("Flagging txn as sent");
+                            FlagSent(txnToSend);
+                        }
                     }
                 }
             });
@@ -46,6 +50,12 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
         public void StopLoop()
         {
             _sendingTransactions = false;
+
+            lock (this)
+            {
+                Monitor.Pulse(this);
+            }
+
             _sendLoop?.GetAwaiter().GetResult();
         }
 

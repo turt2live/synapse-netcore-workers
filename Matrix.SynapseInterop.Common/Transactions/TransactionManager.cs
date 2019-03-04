@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Serilog;
 
 namespace Matrix.SynapseInterop.Common.Transactions
@@ -9,6 +10,8 @@ namespace Matrix.SynapseInterop.Common.Transactions
     public abstract class TransactionManager<T> where T : class
     {
         private static readonly Random RANDOM = new Random();
+
+        private readonly int _maxElements;
 
         private readonly ConcurrentQueue<Transaction<T>> _queuedTransactions = new ConcurrentQueue<Transaction<T>>();
         private readonly bool _storeSent;
@@ -19,8 +22,6 @@ namespace Matrix.SynapseInterop.Common.Transactions
         private Transaction<T> _inFlightTxn;
 
         protected ILogger _logger = Log.ForContext<TransactionManager<T>>();
-
-        private readonly int _maxElements;
 
         public TransactionManager(int maxElementsPerTransaction = 50, bool storeSentTransactionsInMemory = true)
         {
@@ -176,6 +177,11 @@ namespace Matrix.SynapseInterop.Common.Transactions
             }
 
             buffer.AddItems(elements);
+
+            lock (this)
+            {
+                Monitor.Pulse(this);
+            }
         }
 
         private Transaction<T> GetBufferedTransaction()

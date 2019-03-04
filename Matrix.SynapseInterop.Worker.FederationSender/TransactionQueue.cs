@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
@@ -362,6 +361,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         var ts = _backoff.GetBackoffForException(destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
+
                         // Some transactions cannot be retried.
                         if (ts != TimeSpan.Zero)
                         {
