@@ -26,7 +26,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, Task> _destOngoingTrans;
-        private readonly Dictionary<string, Transaction> _destPendingTransactions;
+        private readonly Dictionary<string, LinkedList<Transaction>> _destPendingTransactions;
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
@@ -47,7 +47,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _client = new FederationClient(serverName, key, clientConfig);
             _userPresence = new Dictionary<string, PresenceState>();
             _destOngoingTrans = new Dictionary<string, Task>();
-            _destPendingTransactions = new Dictionary<string, Transaction>();
+            _destPendingTransactions = new Dictionary<string, LinkedList<Transaction>>();
             _destLastDeviceMsgStreamId = new Dictionary<string, long>();
             _destLastDeviceListStreamId = new Dictionary<string, long>();
             _presenceProcessing = Task.CompletedTask;
@@ -132,6 +132,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             messages.Item1.ForEach(message =>
             {
+                // If we go over the limit, go to the next transaction
+                if (transaction.edus.Count == MAX_EDUS_PER_TRANSACTION)
+                {
+                    transaction = GetOrCreateTransactionForDest(destination);
+                }
+
                 transaction.edus.Add(new EduEvent
                 {
                     destination = destination,
@@ -144,6 +150,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             messages.Item2.ForEach(list =>
             {
+                // If we go over the limit, go to the next transaction
+                if (transaction.edus.Count == MAX_EDUS_PER_TRANSACTION)
+                {
+                    transaction = GetOrCreateTransactionForDest(destination);
+                }
+
                 transaction.edus.Add(new EduEvent
                 {
                     destination = destination,
@@ -189,7 +201,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 foreach (var host in hostState.Key)
                 {
                     log.Debug("Sending presence to {host}", host);
-                    // TODO: Handle case where we have over 100 EDUs
                     var transaction = GetOrCreateTransactionForDest(host);
 
                     transaction.edus.Add(new EduEvent
@@ -289,8 +300,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     foreach (var host in hosts)
                     {
                         var transaction = GetOrCreateTransactionForDest(host);
+
                         transaction.pdus.Add(pduEv);
+                        // We are handling this elsewhere.
+#pragma warning disable 4014
                         AttemptTransaction(host);
+#pragma warning restore 4014
                     }
                 }
             }
@@ -323,8 +338,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     _destOngoingTrans.Remove(destination);
                 }
 
-                _destOngoingTrans.Add(destination,
-                                      AttemptNewTransaction(destination));
+                var t = AttemptNewTransaction(destination);
+                _destOngoingTrans.Add(destination, t);
             }
         }
 
@@ -332,9 +347,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             Transaction currentTransaction;
 
-            if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
+            if (!TryPopTransaction(destination, out currentTransaction))
             {
-                log.Debug("No more transactions for {destination}", destination);
+                log.Debug("No transactions for {destination}", destination);
                 return;
             }
 
@@ -350,6 +365,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         WorkerMetrics.IncOngoingTransactions();
                         await _client.SendTransaction(currentTransaction);
                         concurrentTransactionLock.Release();
+                        ClearDeviceMessages(currentTransaction);
                     }
                     catch (Exception ex)
                     {
@@ -362,6 +378,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         var ts = _backoff.GetBackoffForException(destination, ex);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
+
                         // Some transactions cannot be retried.
                         if (ts != TimeSpan.Zero)
                         {
@@ -376,14 +393,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (_backoff.ClearBackoff(destination))
                     log.Information("{destination} has come back online", destination);
-
-                ClearDeviceMessages(currentTransaction);
+                
                 WorkerMetrics.DecOngoingTransactions();
                 WorkerMetrics.IncTransactionsSent(true, destination);
                 WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                 WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
 
-                if (!_destPendingTransactions.TryGetValue(destination, out currentTransaction))
+                if (!TryPopTransaction(destination, out currentTransaction))
                 {
                     log.Debug("No more transactions for {destination}", destination);
                     return;
@@ -525,10 +541,33 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private Transaction GetOrCreateTransactionForDest(string dest)
         {
-            if (_destPendingTransactions.TryGetValue(dest, out var transaction)) return transaction;
+            LinkedList<Transaction> list;
+
+            if (!_destPendingTransactions.ContainsKey(dest))
+            {
+                _destPendingTransactions[dest] = list = new LinkedList<Transaction>();
+            }
+            else
+            {
+                list = _destPendingTransactions[dest];
+            }
+
+            if (list.Count > 0)
+            {
+                var value = list.Last.Value;
+
+                // If there is still room in the transaction.
+                if (value.pdus.Count < MAX_PDUS_PER_TRANSACTION && value.edus.Count < MAX_EDUS_PER_TRANSACTION)
+                {
+                    return value;
+                }
+
+                log.Debug("{host} has gone over a PDU/EDU transaction limit, creating a new transaction", dest);
+            }
+            
             _txnId++;
 
-            transaction = new Transaction
+            var transaction = new Transaction
             {
                 edus = new List<EduEvent>(),
                 pdus = new List<IPduEvent>(),
@@ -538,9 +577,22 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 destination = dest
             };
 
-            _destPendingTransactions.Add(dest, transaction);
+            list.AddLast(transaction);
 
             return transaction;
+        }
+
+        private bool TryPopTransaction(string dest, out Transaction t)
+        {
+            if (_destPendingTransactions.ContainsKey(dest) && _destPendingTransactions[dest].Count > 0)
+            {
+                t = _destPendingTransactions[dest].First();
+                _destPendingTransactions[dest].RemoveFirst();
+                return true;
+            }
+
+            t = default(Transaction);
+            return false;
         }
     }
 }
