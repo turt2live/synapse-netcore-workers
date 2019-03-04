@@ -42,7 +42,7 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
             _aliasNamespaces = namespaces.Where(ns => ns.Kind == AppserviceNamespace.NS_ALIASES).ToArray()
                                          .Select(ns => new Regex(FixRegex(ns.Regex)));
 
-            _asSender = $@"{appservice.SenderLocalpart}:${serverName}";
+            _asSender = $"{appservice.SenderLocalpart}:{serverName}";
             _httpSender = new AppserviceHttpSender(appservice);
         }
 
