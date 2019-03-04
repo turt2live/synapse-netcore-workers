@@ -2,14 +2,16 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Matrix.SynapseInterop.Worker.AppserviceSender.Migrations
 {
     [DbContext(typeof(AppserviceDb))]
-    internal class AppserviceDbModelSnapshot : ModelSnapshot
+    [Migration("20190304022659_CreateAppserviceNamespaces")]
+    partial class CreateAppserviceNamespaces
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

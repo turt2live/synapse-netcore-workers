@@ -1,8 +1,10 @@
 ﻿using System.Linq;
 using System.Text.RegularExpressions;
 using Matrix.SynapseInterop.Common.Extensions;
+using Matrix.SynapseInterop.Common.WebResponses;
 using Matrix.SynapseInterop.Database.WorkerModels;
 using Matrix.SynapseInterop.Worker.AppserviceSender.Dto;
+using Microsoft.EntityFrameworkCore;
 using Routable;
 using Routable.Kestrel;
 
@@ -27,7 +29,10 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
         {
             using (var db = new AppserviceDb())
             {
-                var appservices = db.Appservices.ToDictionary(a => a.Id, a => new AppserviceDto(a));
+                var appservices = db.Appservices
+                                    .Include(a => a.Namespaces)
+                                    .ToDictionary(a => a.Id, a => new AppserviceDto(a));
+
                 resp.WriteJson(appservices);
             }
 
@@ -44,6 +49,16 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
 
             using (var db = new AppserviceDb())
             {
+                // Find homeservers using the AS token
+                var hasAsToken = db.Appservices.Any(a => a.Id != appserviceId && a.AppserviceToken == dto.AsToken);
+
+                if (hasAsToken)
+                {
+                    resp.Status = 400;
+                    resp.WriteJson(new ErrorResponse(ErrorCodes.BAD_REQUEST, "as_token in use"));
+                    return true;
+                }
+
                 var appservice = db.Appservices.Find(appserviceId);
 
                 if (appservice != null)
@@ -53,6 +68,17 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
                     appservice.HomeserverToken = dto.HsToken;
                     appservice.Url = dto.Url;
                     appservice.SenderLocalpart = dto.SenderLocalpart;
+
+                    appservice.ClearNamespaces();
+
+                    dto.Namespaces?.Users?
+                       .ForEach(ns => appservice.AddNamespace(AppserviceNamespace.NS_USERS, ns.Exclusive, ns.Regex));
+
+                    dto.Namespaces?.Aliases?
+                       .ForEach(ns => appservice.AddNamespace(AppserviceNamespace.NS_ALIASES, ns.Exclusive, ns.Regex));
+
+                    dto.Namespaces?.Rooms?
+                       .ForEach(ns => appservice.AddNamespace(AppserviceNamespace.NS_ROOMS, ns.Exclusive, ns.Regex));
                 }
                 else
                 {
@@ -62,6 +88,15 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
                     appservice.HomeserverToken = dto.HsToken;
                     appservice.Url = dto.Url;
                     appservice.SenderLocalpart = dto.SenderLocalpart;
+
+                    dto.Namespaces?.Users?
+                       .ForEach(ns => appservice.AddNamespace(AppserviceNamespace.NS_USERS, ns.Exclusive, ns.Regex));
+
+                    dto.Namespaces?.Aliases?
+                       .ForEach(ns => appservice.AddNamespace(AppserviceNamespace.NS_ALIASES, ns.Exclusive, ns.Regex));
+
+                    dto.Namespaces?.Rooms?
+                       .ForEach(ns => appservice.AddNamespace(AppserviceNamespace.NS_ROOMS, ns.Exclusive, ns.Regex));
 
                     db.Appservices.Add(appservice);
                 }

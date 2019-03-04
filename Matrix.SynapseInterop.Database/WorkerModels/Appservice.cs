@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Matrix.SynapseInterop.Database.WorkerModels
@@ -6,8 +7,6 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
     [Table("appservices")]
     public class Appservice
     {
-        // TODO: Namespace support
-
         [Key]
         [Column("id")]
         public string Id { get; protected set; }
@@ -30,11 +29,31 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
         [Column("metadata")]
         public string Metadata { get; set; }
 
+        public ICollection<AppserviceNamespace> Namespaces { get; set; }
+
         protected Appservice() { } // For EntityFramework
 
         public Appservice(string id)
         {
             Id = id;
+        }
+
+        public void ClearNamespaces()
+        {
+            Namespaces?.Clear();
+        }
+
+        public void AddNamespace(string kind, bool exclusive, string regex)
+        {
+            if (Namespaces == null) Namespaces = new List<AppserviceNamespace>();
+
+            Namespaces.Add(new AppserviceNamespace
+            {
+                AppserviceId = Id,
+                Kind = kind,
+                Regex = regex,
+                Exclusive = exclusive
+            });
         }
     }
 }
