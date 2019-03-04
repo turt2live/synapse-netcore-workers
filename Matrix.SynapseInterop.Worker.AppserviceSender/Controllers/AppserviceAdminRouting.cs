@@ -59,7 +59,8 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Controllers
                     return true;
                 }
 
-                var appservice = db.Appservices.Find(appserviceId);
+                var appservice = db.Appservices.Include(a => a.Namespaces)
+                                   .SingleOrDefault(a => a.Id == appserviceId);
 
                 if (appservice != null)
                 {

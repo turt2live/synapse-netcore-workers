@@ -13,13 +13,13 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
 {
     public class AppserviceTransactionManager : TransactionManager<QueuedEvent>
     {
-        private readonly Appservice _appservice;
         private readonly IEnumerable<Regex> _aliasNamespaces;
+        private readonly Appservice _appservice;
         private readonly string _asSender;
         private readonly IEnumerable<Regex> _roomNamespaces;
+        private readonly IEnumerable<Regex> _userNamespaces;
         private bool _sendingTransactions;
         private Task _sendLoop;
-        private readonly IEnumerable<Regex> _userNamespaces;
 
         public AppserviceTransactionManager(Appservice appservice, string serverName) :
             base(storeSentTransactionsInMemory: false)

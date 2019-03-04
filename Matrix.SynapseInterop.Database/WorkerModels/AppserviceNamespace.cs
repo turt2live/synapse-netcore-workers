@@ -15,6 +15,7 @@ namespace Matrix.SynapseInterop.Database.WorkerModels
         public string Id { get; set; }
 
         [ForeignKey("id")]
+        [Required]
         [Column("appservice_id")]
         public string AppserviceId { get; set; }
 
