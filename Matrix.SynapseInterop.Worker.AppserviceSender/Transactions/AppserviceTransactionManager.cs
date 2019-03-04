@@ -18,6 +18,7 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
         private readonly string _asSender;
         private readonly IEnumerable<Regex> _roomNamespaces;
         private readonly IEnumerable<Regex> _userNamespaces;
+        private readonly AppserviceHttpSender _httpSender;
         private bool _sendingTransactions;
         private Task _sendLoop;
 
@@ -42,6 +43,7 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
                                          .Select(ns => new Regex(FixRegex(ns.Regex)));
 
             _asSender = $@"{appservice.SenderLocalpart}:${serverName}";
+            _httpSender = new AppserviceHttpSender(appservice);
         }
 
         private string FixRegex(string input)
@@ -54,20 +56,31 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender.Transactions
         {
             _sendingTransactions = true;
 
-            _sendLoop = Task.Run(() =>
+            _sendLoop = Task.Run(async () =>
             {
-                lock (this)
+                while (_sendingTransactions)
                 {
-                    while (_sendingTransactions)
+                    lock (this)
                     {
                         Monitor.Wait(this);
-                        var txnToSend = GetTransactionToSend();
+                    }
 
-                        if (txnToSend != null)
+                    var txnToSend = GetTransactionToSend();
+
+                    if (txnToSend != null)
+                    {
+                        _logger.Information("Got txn to send with {0} events", txnToSend.Elements.Count);
+
+                        var success = await _httpSender.SendTransaction(txnToSend);
+
+                        if (success)
                         {
-                            _logger.Information("Got txn to send with {0} events", txnToSend.Elements.Count);
                             _logger.Information("Flagging txn as sent");
                             FlagSent(txnToSend);
+                        }
+                        else
+                        {
+                            _logger.Warning("Transaction failed to send");
                         }
                     }
                 }

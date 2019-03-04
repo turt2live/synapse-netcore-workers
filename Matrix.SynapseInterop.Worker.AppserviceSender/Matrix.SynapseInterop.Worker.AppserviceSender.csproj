@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Matrix.SynapseInterop.Common.MatrixUtils\Matrix.SynapseInterop.Common.MatrixUtils.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Database\Matrix.SynapseInterop.Database.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Replication\Matrix.SynapseInterop.Replication.csproj" />
