@@ -26,7 +26,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _connString;
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
-        private readonly ConcurrentDictionary<string, Task> _destOngoingTrans;
+        private readonly Dictionary<string, Task> _destOngoingTrans;
         private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
         private readonly string _serverName;
 
@@ -48,7 +48,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _client = new FederationClient(serverName, key, clientConfig);
             _userPresence = new Dictionary<string, PresenceState>();
             _destOngoingTrans = new Dictionary<string, Task>();
-            _destPendingTransactions = new Dictionary<string, LinkedList<Transaction>>();
+            _destPendingTransactions = new ConcurrentDictionary<string, LinkedList<Transaction>>();
             _destLastDeviceMsgStreamId = new Dictionary<string, long>();
             _destLastDeviceListStreamId = new Dictionary<string, long>();
             _presenceProcessing = Task.CompletedTask;
@@ -335,7 +335,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
                     if (!_destOngoingTrans[destination].IsCompleted) return;
-
                     _destOngoingTrans.Remove(destination);
                 }
 
@@ -353,8 +352,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 log.Debug("No transactions for {destination}", destination);
                 return;
             }
-
-            _destPendingTransactions.Remove(destination);
 
             while (true)
             {
@@ -406,8 +403,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     log.Debug("No more transactions for {destination}", destination);
                     return;
                 }
-
-                _destPendingTransactions.Remove(destination);
             }
         }
 
@@ -547,7 +542,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (!_destPendingTransactions.ContainsKey(dest))
             {
-                _destPendingTransactions[dest] = list = new LinkedList<Transaction>();
+                list = new LinkedList<Transaction>();
+
+                if (!_destPendingTransactions.TryAdd(dest, list))
+                {
+                    list = _destPendingTransactions[dest];
+                };
             }
             else
             {
