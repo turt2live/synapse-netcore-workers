@@ -369,7 +369,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                     catch (Exception ex)
                     {
-                        WorkerMetrics.DecOngoingTransactions();
                         concurrentTransactionLock.Release();
 
                         log.Warning("Transaction {txnId} {destination} failed: {message}",
@@ -382,6 +381,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         // Some transactions cannot be retried.
                         if (ts != TimeSpan.Zero)
                         {
+                            WorkerMetrics.DecOngoingTransactions();
+
                             log.Information("Retrying txn {txnId} in {secs}s",
                                             currentTransaction.transaction_id, ts.TotalSeconds);
 
