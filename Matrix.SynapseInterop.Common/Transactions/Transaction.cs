@@ -1,13 +1,15 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Matrix.SynapseInterop.Common.Extensions;
 
 namespace Matrix.SynapseInterop.Common.Transactions
 {
     public class Transaction<T> where T : class
     {
-        private readonly List<T> _elements = new List<T>();
+        private readonly ConcurrentBag<T> _elements = new ConcurrentBag<T>();
 
-        public ICollection<T> Elements => _elements.AsReadOnly();
+        public ICollection<T> Elements => _elements.ToArray();
 
         public string Id { get; }
 
@@ -26,7 +28,7 @@ namespace Matrix.SynapseInterop.Common.Transactions
             if (Status != TransactionStatus.NEW)
                 throw new InvalidOperationException("Cannot modify a transaction which is not new");
 
-            _elements.AddRange(items);
+            items.ForEach(i => _elements.Add(i));
         }
     }
 }

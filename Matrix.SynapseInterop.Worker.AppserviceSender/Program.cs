@@ -1,6 +1,9 @@
-﻿using System;
+using System;
 using System.Net;
+using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
+using Matrix.SynapseInterop.Database;
+using Matrix.SynapseInterop.Replication;
 using Matrix.SynapseInterop.Worker.AppserviceSender.Controllers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -15,8 +18,9 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
 {
     internal class Program
     {
-        private static ILogger log;
+        private static ILogger _log;
         private static IConfiguration _config;
+        private static AppserviceManager _manager;
 
         private static void Main(string[] args)
         {
@@ -30,17 +34,59 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
                      .Build();
 
             Logger.Setup(_config.GetSection("Logging"));
-            log = Log.ForContext<Program>();
+            _log = Log.ForContext<Program>();
 
-            log.Information("Connecting to database and running migrations...");
+            SetupDatabase();
+            SetupManager();
+            RunKestrel(); // Blocking
+
+            // Shutdown operations
+            _manager?.Stop();
+        }
+
+        private static async Task<SynapseReplication> StartReplicationAsync()
+        {
+            var replication = new SynapseReplication();
+            replication.ClientName = "NetCoreAppserviceSender";
+            replication.ServerName += Replication_ServerName;
+
+            var synapseConfig = _config.GetSection("Synapse");
+
+            await replication.Connect(synapseConfig.GetValue<string>("replicationHost"),
+                                      synapseConfig.GetValue<int>("replicationPort"));
+
+            return replication;
+        }
+
+        private static void Replication_ServerName(object sender, string e)
+        {
+            _log.Information("Connected to server: {0}", e);
+        }
+
+        private static void SetupDatabase()
+        {
+            _log.Information("Connecting to database and running migrations...");
             AppserviceDb.ConnectionString = _config.GetConnectionString("appserviceWorker");
+            SynapseDbContext.DefaultConnectionString = _config.GetConnectionString("synapse");
 
             using (var context = new AppserviceDb())
             {
                 context.Database.Migrate();
             }
+        }
 
-            log.Information("Setting up Kestrel...");
+        private static async void SetupManager()
+        {
+            _log.Information("Connecting to replication...");
+            var replication = await StartReplicationAsync();
+
+            _log.Information("Setting up appservice manager...");
+            _manager = new AppserviceManager(replication);
+        }
+
+        private static void RunKestrel()
+        {
+            _log.Information("Setting up Kestrel...");
             var kestrelConfig = _config.GetSection("Kestrel");
 
             var host = new WebHostBuilder()
@@ -51,7 +97,7 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
                        {
                            options
                               .WithJsonSupport()
-                              .UseLogger(new RoutableSerilogLogger(log))
+                              .UseLogger(new RoutableSerilogLogger(_log))
                               .AddRouting(new AppserviceAdminRouting(options))
                               .OnError(new KestrelRouting(options)
                                {
@@ -70,7 +116,7 @@ namespace Matrix.SynapseInterop.Worker.AppserviceSender
                        }))
                       .Build();
 
-            log.Information("Running Kestrel...");
+            _log.Information("Running Kestrel...");
             host.Run();
         }
     }

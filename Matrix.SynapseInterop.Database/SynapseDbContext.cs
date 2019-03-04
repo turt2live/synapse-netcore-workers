@@ -10,6 +10,7 @@ namespace Matrix.SynapseInterop.Database
     public class SynapseDbContext : DbContext
     {
         private readonly string _connString;
+        public static string DefaultConnectionString { get; set; }
         public DbQuery<EventJson> EventsJson { get; set; }
         private DbQuery<Event> Events { get; set; }
 
@@ -20,6 +21,8 @@ namespace Matrix.SynapseInterop.Database
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
+
+        public SynapseDbContext() : this(DefaultConnectionString) { }
 
         public SynapseDbContext(string connectionString)
         {
