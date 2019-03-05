@@ -106,6 +106,19 @@ namespace Matrix.SynapseInterop.Common
                                               "cache_name"
                                           }
                                   });
+        
+        private static readonly Counter CacheHit =
+            Metrics.CreateCounter($"{PREFIX}_cache_hit",
+                                  "Number of requested records that were missed by a named cache",
+                                  new CounterConfiguration
+                                  {
+                                      LabelNames =
+                                          new[]
+                                          {
+                                              "instance",
+                                              "cache_name"
+                                          }
+                                  });
 
         private static MetricServer _srv;
         private static string _name;
@@ -162,6 +175,11 @@ namespace Matrix.SynapseInterop.Common
         public static void ReportCacheMiss(string cacheName)
         {
             CacheMiss.WithLabels(_name, cacheName).Inc();
+        }
+
+        public static void ReportCacheHit(string cacheName)
+        {
+            CacheHit.WithLabels(_name, cacheName).Inc();
         }
     }
 }
