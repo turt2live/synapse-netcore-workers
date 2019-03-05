@@ -56,14 +56,23 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 // A socket exception also counts, because they are usually indicative of a remote host not being online.
                 // We could also be suffering, which means we should probably backoff anyway.
-
-                backoff.delayFor += HttpReqBackoff * multiplier;
+                return TimeSpan.Zero;
             }
             
             if (ex is TransactionFailureException txEx)
             {
+                if (txEx.ErrorCode == "M_FORBIDDEN" && txEx.Error.StartsWith("Federation denied with"))
+                {
+                    // This means they don't want to federate with us :(
+                    return TimeSpan.Zero;
+                }
+                
                 if (txEx.Code == HttpStatusCode.NotFound)
-                    backoff.delayFor += HttpReqBackoff * multiplier;
+                    return TimeSpan.Zero;
+
+                if (txEx.Code == HttpStatusCode.BadGateway)
+                    return TimeSpan.Zero;
+
                 else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
