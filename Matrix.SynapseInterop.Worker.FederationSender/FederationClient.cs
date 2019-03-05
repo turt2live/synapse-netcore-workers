@@ -112,9 +112,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (resp.IsSuccessStatusCode) return;
 
-            if (resp.StatusCode == HttpStatusCode.NotFound) destinationUris.Remove(transaction.destination);
-            // TODO: Should we drop well known for other reasons?
-
             var error = await resp.Content.ReadAsStringAsync();
             var err = JObject.Parse(error);
 
