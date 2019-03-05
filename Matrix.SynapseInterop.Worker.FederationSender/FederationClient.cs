@@ -61,20 +61,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             var record = await hostResolver.GetHostRecord(transaction.destination);
 
-            if (record.GetStatus() == HostStatus.UNKNOWN || record.Expired)
-            {
-                // We don't know if this host is up or down yet, check.
-                try
-                {
-                    await GetVersion(transaction.destination);
-                    record.SetStatus(HostStatus.UP);
-                }
-                catch (Exception)
-                {
-                    record.SetStatus(HostStatus.DOWN);
-                }
-            }
-
             if (record.GetStatus() == HostStatus.DOWN)
             {
                 // We can't send this transaction.
@@ -178,7 +164,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             catch (HttpRequestException ex)
             {
                 //TODO: This is probably a little extreme.
-                
                 log.Warning("Failed to reach {destination} {message}", destination, ex.Message);
                 hostResolver.RemovehostRecord(destination);
                 throw;

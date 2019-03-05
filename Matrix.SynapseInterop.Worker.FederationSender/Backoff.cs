@@ -15,7 +15,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     public class Backoff
     {
         private static readonly TimeSpan MaxDelay = TimeSpan.FromDays(1);
-        private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(25);
+        private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
         private readonly Dictionary<string, SBackoff> hosts;
         private readonly Random random;
@@ -33,7 +33,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public TimeSpan GetBackoffForException(string host, Exception ex)
         {
-            var multiplier = (double) random.Next(6, 16) / 10;
+            var multiplier = (double) random.Next(8, 16) / 10;
 
             if (!hosts.TryGetValue(host, out var backoff))
             {
@@ -57,13 +57,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 // A socket exception also counts, because they are usually indicative of a remote host not being online.
                 // We could also be suffering, which means we should probably backoff anyway.
 
-                return TimeSpan.Zero;
+                backoff.delayFor += HttpReqBackoff * multiplier;
             }
-            else if (ex is TransactionFailureException txEx)
+            
+            if (ex is TransactionFailureException txEx)
             {
-                if (txEx.Code == HttpStatusCode.NotFound) return TimeSpan.Zero;
-
-                if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
+                if (txEx.Code == HttpStatusCode.NotFound)
+                    backoff.delayFor += HttpReqBackoff * multiplier;
+                else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
                     // This is because the body is mangled and will never succeed, drop it.
