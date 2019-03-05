@@ -21,7 +21,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private static readonly ILogger log = Log.ForContext<FederationSender>();
         private readonly bool allowSelfSigned;
         private readonly HttpClient client;
-        private readonly Dictionary<string, Uri> destinationUris;
         private readonly HostResolver hostResolver;
         private readonly SigningKey key;
         private readonly string origin;
@@ -35,10 +34,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback
             });
 
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = TimeSpan.FromMinutes(5);
 
             this.key = key;
-            destinationUris = new Dictionary<string, Uri>();
             hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008);
             allowSelfSigned = config.GetValue<bool>("allowSelfSigned");
         }
@@ -102,7 +100,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 //TODO: This is probably a little extreme.
                 log.Warning("Failed to reach {destination} {message}", transaction.destination, ex.Message);
-                destinationUris.Remove(transaction.destination);
                 throw;
             }
             finally
