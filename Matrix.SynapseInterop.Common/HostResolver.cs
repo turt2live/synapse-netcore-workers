@@ -2,20 +2,30 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using DnsClient;
 using DnsClient.Protocol;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Common
 {
+    public enum HostStatus
+    {
+        UNKNOWN = 0,
+        UP = 1,
+        DOWN = 2,
+    }
+    
     public class HostRecord
     {
-        private static readonly TimeSpan TTL = TimeSpan.FromDays(1);
+        private static readonly TimeSpan TTL = TimeSpan.FromHours(6);
 
         private readonly SrvRecord[] _entries;
         private readonly string _host;
         private readonly Uri _resolvedUri;
+        private HostStatus status;
         public DateTime LastAccessed;
 
         public bool Expired => DateTime.Now - LastAccessed > TTL;
@@ -26,6 +36,7 @@ namespace Matrix.SynapseInterop.Common
             LastAccessed = DateTime.Now;
             _entries = entries;
             _host = host;
+            status = HostStatus.UNKNOWN;
         }
 
         public Uri GetUri()
@@ -34,6 +45,16 @@ namespace Matrix.SynapseInterop.Common
             return _resolvedUri;
         }
 
+        public void SetStatus(HostStatus s)
+        {
+            status = s;
+        }
+        
+        public HostStatus GetStatus()
+        {
+            return status;
+        }
+        
         public string GetHost()
         {
             if (_entries != null) return _host;
@@ -44,10 +65,12 @@ namespace Matrix.SynapseInterop.Common
 
     public class HostResolver
     {
+        private static readonly ILogger log = Log.ForContext<HostResolver>();
         private readonly int _defaultPort;
         private readonly Dictionary<string, HostRecord> _hosts;
         private readonly LookupClient _lookupClient;
         private readonly HttpClient _wKclient;
+        private SemaphoreSlim _srvSemaphore;
 
         public HostResolver(int defaultPort)
         {
@@ -56,18 +79,22 @@ namespace Matrix.SynapseInterop.Common
             _hosts = new Dictionary<string, HostRecord>();
             _defaultPort = defaultPort;
             _lookupClient = new LookupClient();
+            _srvSemaphore = new SemaphoreSlim(500, 500);
         }
 
         public async Task<HostRecord> GetHostRecord(string destination)
         {
             var hasValue = _hosts.TryGetValue(destination, out var host);
-            var expired = hasValue && host.Expired;
 
-            if (hasValue && !expired) return host;
+            if (hasValue && !host.Expired)
+            {
+                WorkerMetrics.ReportCacheHit("hostresolver_hosts");
+                return host;
+            }
 
             WorkerMetrics.ReportCacheMiss("hostresolver_hosts");
 
-            if (expired) _hosts.Remove(destination);
+            if (hasValue) _hosts.Remove(destination);
 
             using (WorkerMetrics.HostLookupDurationTimer())
             {
@@ -77,12 +104,18 @@ namespace Matrix.SynapseInterop.Common
             }
 
             WorkerMetrics.ReportCacheSize("hostresolver_hosts", _hosts.Count);
+            
+            // Test if the host is down.
 
             return host;
         }
 
+        public void RemovehostRecord(string destination) => _hosts.Remove(destination);
+
         private async Task<Tuple<Uri, SrvRecord[]>> ResolveHost(string destination)
         {
+            log.Debug("Resolving host {host}", destination);
+
             // https://matrix.org/docs/spec/server_server/r0.1.0.html#resolving-server-names
             if (TryHandleBasicHost(destination, out var basicHost))
                 return Tuple.Create<Uri, SrvRecord[]>(basicHost, null);
@@ -112,10 +145,13 @@ namespace Matrix.SynapseInterop.Common
                     // ignored - Failures to resolve well known should fall through.
                 }
 
-            // Do the DNS
+            // Do the DNS - Wait here to ensure we don't spam the DNS
+            await _srvSemaphore.WaitAsync();
+
             var result = await _lookupClient
                .QueryAsync($"_matrix._tcp.{rawUri.Host}", QueryType.SRV);
 
+            _srvSemaphore.Release();
             var records = result.Answers.Where(r => r is SrvRecord).Cast<SrvRecord>().ToArray();
 
             if (result.HasError || records.Length == 0) return Tuple.Create<Uri, SrvRecord[]>(rawUri, null);
