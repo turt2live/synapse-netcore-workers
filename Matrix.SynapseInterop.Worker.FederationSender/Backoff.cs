@@ -14,8 +14,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
     public class Backoff
     {
-        private const int MaxMilliseconds = 60 * 60 * 24 * 1000;
-        private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan MaxDelay = TimeSpan.FromDays(1);
+        private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(25);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
         private readonly Dictionary<string, SBackoff> hosts;
         private readonly Random random;
@@ -33,7 +33,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public TimeSpan GetBackoffForException(string host, Exception ex)
         {
-            var multiplier = (double) random.Next(8, 14) / 10;
+            var multiplier = (double) random.Next(6, 16) / 10;
 
             if (!hosts.TryGetValue(host, out var backoff))
             {
@@ -41,8 +41,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     delayFor = TimeSpan.Zero
                 };
-
-                hosts.Add(host, backoff);
+            }
+            else
+            {
+                hosts.Remove(host);
             }
 
             if (ex is HttpRequestException || ex is JsonReaderException || ex is SocketException)
@@ -55,12 +57,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 // A socket exception also counts, because they are usually indicative of a remote host not being online.
                 // We could also be suffering, which means we should probably backoff anyway.
 
-                backoff.delayFor += HttpReqBackoff * multiplier;
+                return TimeSpan.Zero;
             }
             else if (ex is TransactionFailureException txEx)
             {
-                if (txEx.Code == HttpStatusCode.NotFound) backoff.delayFor += HttpReqBackoff * multiplier;
-                else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
+                if (txEx.Code == HttpStatusCode.NotFound) return TimeSpan.Zero;
+
+                if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
                     // This is because the body is mangled and will never succeed, drop it.
@@ -75,7 +78,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 backoff.delayFor += NormalBackoff * multiplier;
             }
 
-            backoff.delayFor = TimeSpan.FromMilliseconds(Math.Min(MaxMilliseconds, backoff.delayFor.TotalMilliseconds));
+            hosts.Add(host, backoff);
+
+            backoff.delayFor = TimeSpan.FromMilliseconds(Math.Min(MaxDelay.TotalMilliseconds, backoff.delayFor.TotalMilliseconds));
 
             return backoff.delayFor;
         }
