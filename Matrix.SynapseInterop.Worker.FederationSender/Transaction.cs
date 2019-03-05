@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Matrix.SynapseInterop.Replication.Structures;
 using Newtonsoft.Json;

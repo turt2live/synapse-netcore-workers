@@ -14,14 +14,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public override string Message => $"Failure sending transaction to {Host}: {Code}. {ErrorCode} {Error}";
 
-        public TransactionFailureException(string host, HttpStatusCode statusCode, JObject resp)
+        public TransactionFailureException(string host, HttpStatusCode statusCode, JObject resp = null)
         {
             Host = host;
             Code = statusCode;
+            if (resp == null ) return;
 
             if (resp.ContainsKey("retry_after_ms")) BackoffFor = (int) resp["retry_after_ms"];
 
-            if (!resp.ContainsKey("errcode")) return;
             ErrorCode = (string) resp["errcode"];
             Error = (string) resp["error"];
         }

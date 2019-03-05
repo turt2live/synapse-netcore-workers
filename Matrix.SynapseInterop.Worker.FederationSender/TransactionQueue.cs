@@ -31,8 +31,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
-        private readonly object attemptTransactionLock = new object();
-        private readonly SemaphoreSlim concurrentTransactionLock;
+        private readonly SemaphoreSlim _concurrentTransactionLock;
         private Task _eventsProcessing;
         private int _lastEventPoke;
         private Task _presenceProcessing;
@@ -63,7 +62,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (txConcurrency == 0) txConcurrency = 100;
 
-            concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
+            _concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
         }
 
         public void OnEventUpdate(string streamPos)
@@ -330,7 +329,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private void AttemptTransaction(string destination)
         {
             // Lock here to avoid racing.
-            lock (attemptTransactionLock)
+            lock (this)
             {
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
@@ -359,15 +358,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     try
                     {
-                        await concurrentTransactionLock.WaitAsync();
+                        await _concurrentTransactionLock.WaitAsync();
                         WorkerMetrics.IncOngoingTransactions();
                         await _client.SendTransaction(currentTransaction);
-                        concurrentTransactionLock.Release();
+                        _concurrentTransactionLock.Release();
                         ClearDeviceMessages(currentTransaction);
                     }
                     catch (Exception ex)
                     {
-                        concurrentTransactionLock.Release();
+                        _concurrentTransactionLock.Release();
 
                         log.Warning("Transaction {txnId} {destination} failed: {message}",
                                     currentTransaction.transaction_id, destination, ex.Message);
@@ -387,6 +386,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             await Task.Delay((int) ts.TotalMilliseconds);
                             continue;
                         }
+
+                        Log.Warning("NOT retrying {txnId} for {destination}", currentTransaction.transaction_id, destination);
                     }
                 }
 

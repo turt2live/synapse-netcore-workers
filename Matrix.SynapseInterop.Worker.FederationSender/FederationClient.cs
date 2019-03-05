@@ -61,6 +61,26 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             var record = await hostResolver.GetHostRecord(transaction.destination);
 
+            if (record.GetStatus() == HostStatus.UNKNOWN || record.Expired)
+            {
+                // We don't know if this host is up or down yet, check.
+                try
+                {
+                    await GetVersion(transaction.destination);
+                    record.SetStatus(HostStatus.UP);
+                }
+                catch (Exception)
+                {
+                    record.SetStatus(HostStatus.DOWN);
+                }
+            }
+
+            if (record.GetStatus() == HostStatus.DOWN)
+            {
+                // We can't send this transaction.
+                throw new TransactionFailureException(transaction.destination, HttpStatusCode.NotFound);
+            }
+
             var uri = new UriBuilder(record.GetUri())
             {
                 Path = $"/_matrix/federation/v1/send/{transaction.transaction_id}/",
@@ -84,38 +104,20 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                             "application/json");
 
             msg.Content = content;
-            HttpResponseMessage resp;
-            var sw = new Stopwatch();
 
-            try
-            {
-                log.Information("[TX] {destination} PUT {uri} Host={hostHeader} PDUs={pduCount} EDUs={eduCount}"
-                                , transaction.destination, uri, msg.Headers.Host, transaction.pdus.Count,
-                                transaction.edus.Count);
+            log.Information("[TX] {destination} => /send/{txnId} PDUs={pduCount} EDUs={eduCount}"
+                            , transaction.destination, transaction.transaction_id, transaction.pdus.Count,
+                            transaction.edus.Count);
 
-                sw.Start();
-                resp = await client.SendAsync(msg);
-            }
-            catch (HttpRequestException ex)
-            {
-                //TODO: This is probably a little extreme.
-                log.Warning("Failed to reach {destination} {message}", transaction.destination, ex.Message);
-                throw;
-            }
-            finally
-            {
-                sw.Stop();
-            }
-
-            log.Information("[TX] {destination} Response: {statusCode} {timeTaken}ms",
-                            transaction.destination, resp.StatusCode, sw.ElapsedMilliseconds);
-
+            HttpResponseMessage resp = await Send(msg, transaction.destination);
+ 
             if (resp.IsSuccessStatusCode) return;
 
             var error = await resp.Content.ReadAsStringAsync();
             var err = JObject.Parse(error);
 
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
+            {
                 try
                 {
                     var errCode = (string) err["errcode"];
@@ -134,8 +136,67 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     // ignored
                 }
+            }
 
             throw new TransactionFailureException(transaction.destination, resp.StatusCode, err);
+        }
+
+        private async Task<JObject> GetVersion(string destination)
+        {
+            var record = await hostResolver.GetHostRecord(destination);
+
+            var msg = new HttpRequestMessage
+            {
+                Method = HttpMethod.Put,
+                RequestUri = new UriBuilder(record.GetUri())
+                {
+                    Path = $"/_matrix/federation/version",
+                    Scheme = "https",
+                }.Uri,
+            };
+
+            msg.Headers.Host = record.GetHost();
+
+            var res = await Send(msg, destination);
+            res.EnsureSuccessStatusCode();
+            return JObject.Parse(await res.Content.ReadAsStringAsync());
+        }
+
+        private async Task<HttpResponseMessage> Send(HttpRequestMessage msg, string destination)
+        {
+            var sw = new Stopwatch();
+            HttpResponseMessage resp = null;
+
+            try
+            {
+                log.Information("[TX] {destination} PUT {uri} Host={hostHeader}"
+                                , destination, msg.RequestUri, msg.Headers.Host);
+
+                sw.Start();
+                resp = await client.SendAsync(msg);
+            }
+            catch (HttpRequestException ex)
+            {
+                //TODO: This is probably a little extreme.
+                
+                log.Warning("Failed to reach {destination} {message}", destination, ex.Message);
+                hostResolver.RemovehostRecord(destination);
+                throw;
+            }
+            finally
+            {
+                sw.Stop();
+
+                log.Information("[TX] {destination} Response {timeTaken}ms {statusCode} ",
+                                destination, sw.ElapsedMilliseconds, resp?.StatusCode);
+            }
+
+            if (resp != null && resp.StatusCode == HttpStatusCode.NotFound)
+            {
+                hostResolver.RemovehostRecord(destination);
+            }
+
+            return resp;
         }
 
         private void SignRequest(HttpRequestMessage msg, string destination, JObject body = null)
