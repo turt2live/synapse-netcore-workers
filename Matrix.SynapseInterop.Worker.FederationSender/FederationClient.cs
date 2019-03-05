@@ -34,7 +34,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback
             });
 
-            client.Timeout = TimeSpan.FromMinutes(5);
+            client.Timeout = TimeSpan.FromMinutes(3);
 
             this.key = key;
             hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008);
