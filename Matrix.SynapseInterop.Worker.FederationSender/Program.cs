@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using Matrix.SynapseInterop.Common;
 using Microsoft.Extensions.Configuration;
 
@@ -10,6 +11,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private static void Main(string[] args)
         {
+            // Because we will be doing a LOT of http requests.
+            ServicePointManager.DefaultConnectionLimit = 1000;
+
             _config = new ConfigurationBuilder()
                      .AddJsonFile("appsettings.default.json", true, true)
                      .AddJsonFile("appsettings.json", true, true)
