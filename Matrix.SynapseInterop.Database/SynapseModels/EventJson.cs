@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Matrix.SynapseInterop.Database.Models
+namespace Matrix.SynapseInterop.Database.SynapseModels
 {
     [Table("event_json")]
     public class EventJson

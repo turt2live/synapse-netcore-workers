@@ -1,18 +1,27 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Common.Transactions
 {
     public abstract class TransactionManager<T> where T : class
     {
         private static readonly Random RANDOM = new Random();
-        private readonly List<Transaction<T>> _queuedTransactions = new List<Transaction<T>>();
+
+        private readonly int _maxElements;
+
+        private readonly ConcurrentQueue<Transaction<T>> _queuedTransactions = new ConcurrentQueue<Transaction<T>>();
         private readonly bool _storeSent;
 
-        private readonly Dictionary<string, Transaction<T>> _transactions = new Dictionary<string, Transaction<T>>();
+        private readonly ConcurrentDictionary<string, Transaction<T>> _transactions =
+            new ConcurrentDictionary<string, Transaction<T>>();
 
-        private int _maxElements;
+        private Transaction<T> _inFlightTxn;
+
+        protected ILogger _logger = Log.ForContext<TransactionManager<T>>();
 
         public TransactionManager(int maxElementsPerTransaction = 50, bool storeSentTransactionsInMemory = true)
         {
@@ -23,7 +32,7 @@ namespace Matrix.SynapseInterop.Common.Transactions
 
             foreach (var txn in pending)
             {
-                _queuedTransactions.Add(txn);
+                _queuedTransactions.Enqueue(txn);
                 _transactions[txn.Id] = txn;
             }
 
@@ -41,15 +50,15 @@ namespace Matrix.SynapseInterop.Common.Transactions
         /// <summary>
         ///     Persists the queue of transactions to send
         /// </summary>
-        /// <param name="queue">The transactions to send</param>
-        protected abstract void PersistTransactionQueue(List<Transaction<T>> queue);
+        /// <param name="queue">The transactions to persist</param>
+        protected abstract void PersistTransactionQueue(Transaction<T>[] queue);
 
         /// <summary>
         ///     Loads the queue of transactions to send to the destination. If no transactions are queued,
         ///     this should return an empty queue.
         /// </summary>
         /// <returns>The queue of transactions to send. May be empty.</returns>
-        protected abstract List<Transaction<T>> LoadTransactionQueue();
+        protected abstract Transaction<T>[] LoadTransactionQueue();
 
         /// <summary>
         ///     Loads the transactions with a given status, returning an empty collection if none match the criteria.
@@ -94,11 +103,13 @@ namespace Matrix.SynapseInterop.Common.Transactions
             if (!_transactions.ContainsKey(id))
             {
                 var txn = LoadTransaction(id);
+                if (txn == null) return null;
 
                 if (txn.Id != id)
                     throw new InvalidProgramException("Loaded transaction that didn't match the one requested");
 
                 if (txn.Status != TransactionStatus.SENT || _storeSent) _transactions[id] = txn;
+                return txn;
             }
 
             return _transactions[id];
@@ -110,36 +121,67 @@ namespace Matrix.SynapseInterop.Common.Transactions
         /// <returns>The next transaction that should be sent, or null if none ready</returns>
         public Transaction<T> GetTransactionToSend()
         {
-            if (_queuedTransactions.Any())
-                return _queuedTransactions[0];
+            if (_inFlightTxn != null) return _inFlightTxn;
+
+            Transaction<T> txn;
+
+            if (_queuedTransactions.TryDequeue(out txn))
+            {
+                _inFlightTxn = txn;
+                return txn;
+            }
 
             RotatePendingTransaction();
 
-            if (_queuedTransactions.Any())
-                return _queuedTransactions[0];
+            if (_queuedTransactions.TryDequeue(out txn))
+            {
+                _inFlightTxn = txn;
+                return txn;
+            }
 
             return null;
         }
 
         public void FlagSent(Transaction<T> transaction)
         {
+            if (transaction != _inFlightTxn)
+                throw new InvalidOperationException("The transaction that was sent is not the in flight transaction");
+
             transaction.Status = TransactionStatus.SENT;
             PersistTransaction(transaction);
 
-            if (_queuedTransactions.Contains(transaction))
-            {
-                _queuedTransactions.Remove(transaction);
-                PersistTransactionQueue(_queuedTransactions.Clone());
-            }
+            _inFlightTxn = null;
 
             if (!_storeSent && _transactions.ContainsKey(transaction.Id))
-                _transactions.Remove(transaction.Id);
+            {
+                Transaction<T> discard;
+
+                if (!_transactions.TryRemove(transaction.Id, out discard))
+                    _logger.Warning("Failed to remove {0} from the transaction dictionary", transaction.Id);
+            }
+        }
+
+        public void QueueElement(T element)
+        {
+            QueueElements(new[] {element});
         }
 
         public void QueueElements(ICollection<T> elements)
         {
             var buffer = GetBufferedTransaction();
+
+            if (buffer.Elements.Count + elements.Count > _maxElements)
+            {
+                RotatePendingTransaction();
+                buffer = GetBufferedTransaction();
+            }
+
             buffer.AddItems(elements);
+
+            lock (this)
+            {
+                Monitor.Pulse(this);
+            }
         }
 
         private Transaction<T> GetBufferedTransaction()
@@ -157,8 +199,12 @@ namespace Matrix.SynapseInterop.Common.Transactions
 
             pendingTxn.Status = TransactionStatus.QUEUED;
             PersistTransaction(pendingTxn);
-            _queuedTransactions.Add(pendingTxn);
-            PersistTransactionQueue(_queuedTransactions.Clone());
+            _queuedTransactions.Enqueue(pendingTxn);
+
+            var fullQueue = new List<Transaction<T>>();
+            if (_inFlightTxn != null) fullQueue.Add(_inFlightTxn);
+            fullQueue.AddRange(_queuedTransactions.ToArray());
+            PersistTransactionQueue(fullQueue.ToArray());
 
             CreateTransaction();
         }
@@ -168,7 +214,7 @@ namespace Matrix.SynapseInterop.Common.Transactions
             var nextId = GetNextId();
             var txn = new Transaction<T>(nextId);
             PersistTransaction(txn);
-            _transactions[nextId] = txn;
+            _transactions.AddOrUpdate(nextId, txn, (k, v) => txn);
 
             return txn;
         }

@@ -13,11 +13,12 @@ namespace Matrix.SynapseInterop.Common
                 level = LogEventLevel.Information;
 
             Log.Logger = new LoggerConfiguration()
-                        .Filter
-                        .ByIncludingOnly(e => e.Level >= level)
+                        .MinimumLevel.Debug()
+                        .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                        .Filter.ByIncludingOnly(e => e.Level >= level)
                         .WriteTo
                         .Console(outputTemplate:
-                                 "{Timestamp:yy-MM-dd HH:mm:ss.fff} {Level:u3} {SourceContext:lj} {Message:lj}{NewLine}{Exception}")
+                                 "{Timestamp:yy-MM-dd HH:mm:ss.fff} {Level:u3} {SourceContext:lj} {@Properties} {Message:lj}{NewLine}{Exception}")
                         .CreateLogger();
         }
     }

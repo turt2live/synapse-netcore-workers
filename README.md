@@ -48,3 +48,14 @@ your workers:
 ```
 docker build -t synapseinterop:appservice_sender -f Matrix.SynapseInterop.Worker.AppserviceSender/Dockerfile .
 ```
+
+
+## Developer information
+
+#### Migrations
+
+TODO: Actual documentation
+
+```
+dotnet ef migrations add CreateAppservices --project .\Matrix.SynapseInterop.Worker.AppserviceSender\Matrix.SynapseInterop.Worker.AppserviceSender.csproj --startup-project .\Matrix.SynapseInterop.Worker.AppserviceSender\Matrix.SynapseInterop.Worker.AppserviceSender.csproj --context Matrix.SynapseInterop.Worker.AppserviceSender.AppserviceDb
+```

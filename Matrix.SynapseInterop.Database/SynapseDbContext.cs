@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using Matrix.SynapseInterop.Common;
-using Matrix.SynapseInterop.Database.Models;
+using Matrix.SynapseInterop.Database.SynapseModels;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 
@@ -10,16 +10,19 @@ namespace Matrix.SynapseInterop.Database
     public class SynapseDbContext : DbContext
     {
         private readonly string _connString;
-        public DbQuery<EventJson> EventsJson { get; set; }
-        private DbQuery<Event> Events { get; set; }
+        public static string DefaultConnectionString { get; set; }
 
+        public DbQuery<EventJson> EventsJson { get; set; }
+        public DbQuery<Event> Events { get; set; }
         public DbQuery<RoomMemberships> RoomMemberships { get; set; }
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
         public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
-
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
+        public DbQuery<RoomAlias> RoomAliases { get; set; }
+
+        public SynapseDbContext() : this(DefaultConnectionString) { }
 
         public SynapseDbContext(string connectionString)
         {
