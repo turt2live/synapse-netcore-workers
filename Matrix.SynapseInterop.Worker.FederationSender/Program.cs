@@ -13,6 +13,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             // Because we will be doing a LOT of http requests.
             ServicePointManager.DefaultConnectionLimit = 1000;
+            ServicePointManager.ReusePort = true;
 
             _config = new ConfigurationBuilder()
                      .AddJsonFile("appsettings.default.json", true, true)

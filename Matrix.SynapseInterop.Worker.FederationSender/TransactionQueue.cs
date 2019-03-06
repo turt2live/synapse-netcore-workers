@@ -363,6 +363,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         await _client.SendTransaction(currentTransaction);
                         _concurrentTransactionLock.Release();
                         ClearDeviceMessages(currentTransaction);
+                        WorkerMetrics.IncTransactionsSent(true, destination);
                     }
                     catch (Exception ex)
                     {
@@ -395,7 +396,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     log.Information("{destination} has come back online", destination);
                 
                 WorkerMetrics.DecOngoingTransactions();
-                WorkerMetrics.IncTransactionsSent(true, destination);
                 WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                 WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
 
