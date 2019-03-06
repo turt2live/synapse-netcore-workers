@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Microsoft.Extensions.Configuration;
@@ -28,10 +29,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public FederationClient(string serverName, SigningKey key, IConfigurationSection config)
         {
             origin = serverName;
-
-            client = new HttpClient(new HttpClientHandler
+        
+            client = new HttpClient(new SocketsHttpHandler
             {
-                ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback
+                SslOptions = new SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = ServerCertificateValidationCallback
+                },
+                UseProxy = false,
+                UseCookies = false,
+                
             });
 
             client.Timeout = TimeSpan.FromMinutes(3);
