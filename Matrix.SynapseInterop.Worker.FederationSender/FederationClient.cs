@@ -166,7 +166,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                 , destination, msg.RequestUri, msg.Headers.Host);
 
                 sw.Start();
-                resp = await client.SendAsync(msg);
+                resp = await client.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
             }
             catch (HttpRequestException ex)
             {
