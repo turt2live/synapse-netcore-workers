@@ -95,21 +95,23 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _presenceProcessing = ProcessPendingPresence();
         }
 
-        public void SendEdu(EduEvent obj)
+        public void SendEdu(EduEvent ev)
         {
-            if (obj.destination == _serverName) return;
+            if (ev.destination == _serverName || _backoff.HostIsDown(ev.destination)) return;
 
             // Prod device messages if we've not seen this destination before.
-            if (!_destLastDeviceMsgStreamId.ContainsKey(obj.destination)) SendDeviceMessages(obj.destination);
+            if (!_destLastDeviceMsgStreamId.ContainsKey(ev.destination)) SendDeviceMessages(ev.destination);
 
-            var transaction = GetOrCreateTransactionForDest(obj.destination);
+            var transaction = GetOrCreateTransactionForDest(ev.destination);
 
-            transaction.edus.Add(obj);
-            AttemptTransaction(obj.destination);
+            transaction.edus.Add(ev);
+            AttemptTransaction(ev.destination);
         }
 
         public void SendEdu(EduEvent ev, string key)
         {
+            if (ev.destination == _serverName || _backoff.HostIsDown(ev.destination)) return;
+
             var transaction = GetOrCreateTransactionForDest(ev.destination);
             var existingItem = transaction.edus.FindIndex(edu => edu.InternalKey == key);
 
@@ -122,6 +124,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public void SendDeviceMessages(string destination)
         {
             if (_serverName == destination) return; // Obviously.
+
+            if (_backoff.HostIsDown(destination))
+            {
+                return;
+            }
 
             // Fetch messages for destination
             var messages = GetNewDeviceMessages(destination);
@@ -372,9 +379,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         log.Warning("Transaction {txnId} {destination} failed: {message}",
                                     currentTransaction.transaction_id, destination, ex.Message);
 
-                        var ts = _backoff.GetBackoffForException(destination, ex);
-
                         WorkerMetrics.IncTransactionsSent(false, destination);
+
+                        var isDown = _backoff.MarkHostIfDown(destination, ex);
+
+                        if (isDown)
+                        {
+                            lock (_destPendingTransactions)
+                            {
+                                log.Warning("{destination} marked as DOWN", destination);
+                                _destPendingTransactions[destination].Clear();
+                                return;
+                            }
+                        }
+
+                        var ts = _backoff.GetBackoffForException(destination, ex);
 
                         // Some transactions cannot be retried.
                         if (ts != TimeSpan.Zero)
@@ -414,6 +433,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList()
                                          .ConvertAll(m => Tuple.Create(m.StreamId, (string) m.content["user_id"]));
+
+            if (deviceLists.Count == 0 && deviceMsgs.Count == 0)
+            {
+                // Optimise early.
+                return;
+            }
 
             using (var db = new SynapseDbContext(_connString))
             {
@@ -509,6 +534,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     // Never include ourselves
                     hosts.Remove(_serverName);
+                    // Don't include dead hosts.
+                    hosts.RemoveWhere(_backoff.HostIsDown);
                     // Now get the hosts for that room.
                     dict.Add(hosts.ToArray(), presence);
                 }
@@ -528,7 +555,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                           hosts.Add(m.UserId.Split(":")[1]));
             }
 
+            // Never include ourselves
             hosts.Remove(_serverName);
+            // Don't include dead hosts.
+            hosts.RemoveWhere(_backoff.HostIsDown);
             return hosts;
         }
 

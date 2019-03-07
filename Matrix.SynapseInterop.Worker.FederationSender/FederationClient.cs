@@ -69,12 +69,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             var record = await hostResolver.GetHostRecord(transaction.destination);
 
-            if (record.GetStatus() == HostStatus.DOWN)
-            {
-                // We can't send this transaction.
-                throw new TransactionFailureException(transaction.destination, HttpStatusCode.NotFound);
-            }
-
             var uri = new UriBuilder(record.GetUri())
             {
                 Path = $"/_matrix/federation/v1/send/{transaction.transaction_id}/",
@@ -99,7 +93,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             msg.Content = content;
 
-            log.Information("[TX] {destination} => /send/{txnId} PDUs={pduCount} EDUs={eduCount}"
+            log.Debug("[TX] {destination} => /send/{txnId} PDUs={pduCount} EDUs={eduCount}"
                             , transaction.destination, transaction.transaction_id, transaction.pdus.Count,
                             transaction.edus.Count);
 
@@ -119,9 +113,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
                     {
-                        log.Information("Got invalid signature, debug info:");
+                        log.Warning("Got invalid signature");
 
-                        log.Information("Auth: {auth}\nBody: {body}",
+                        log.Debug("Auth: {auth}\nBody: {body}",
                                         msg.Headers.Authorization.Parameter,
                                         body.ToString(Formatting.Indented));
                     }
@@ -163,7 +157,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             try
             {
-                log.Information("[TX] {destination} PUT {uri} Host={hostHeader}"
+                log.Debug("[TX] {destination} PUT {uri} Host={hostHeader}"
                                 , destination, msg.RequestUri, msg.Headers.Host);
 
                 sw.Start();
@@ -180,7 +174,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 sw.Stop();
 
-                log.Information("[TX] {destination} Response {timeTaken}ms {statusCode} ",
+                log.Debug("[TX] {destination} Response {timeTaken}ms {statusCode} ",
                                 destination, sw.ElapsedMilliseconds, resp?.StatusCode);
             }
 
