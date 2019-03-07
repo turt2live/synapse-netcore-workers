@@ -12,7 +12,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private static void Main(string[] args)
         {
             // Because we will be doing a LOT of http requests.
-            ServicePointManager.DefaultConnectionLimit = 1000;
             ServicePointManager.ReusePort = true;
 
             _config = new ConfigurationBuilder()
@@ -30,6 +29,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 WorkerMetrics.StartMetrics("federation_worker",
                                            metricConfig.GetValue("bindPort", 9150),
                                            metricConfig.GetValue<string>("bindHost"));
+            
+            ServicePointManager.DefaultConnectionLimit = _config.GetSection("Http").GetValue("connectionLimit", 50);
 
             new FederationSender(_config).Start().Wait();
 
