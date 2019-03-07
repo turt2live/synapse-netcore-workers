@@ -258,6 +258,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 var hosts = await GetHostsInRoom(item.Key);
 
+                if (hosts.Count == 0)
+                {
+                    continue;
+                }
+
                 foreach (var roomEvent in item)
                 {
                     // TODO: Support send_on_bahalf_of?

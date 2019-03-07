@@ -35,7 +35,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             if (_hosts.TryGetValue(host, out var h))
             {
-                return DateTime.Now > h.Ts + h.delayFor;
+                return DateTime.Now < h.Ts + h.delayFor;
             }
 
             return false;
@@ -77,7 +77,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 else if (txEx.Code == HttpStatusCode.NotFound || txEx.Code == HttpStatusCode.BadGateway)
                     isDown = true;
             }
-
+            
             if (_hosts.TryGetValue(host, out var h))
             {
                 h.isDown = isDown;
