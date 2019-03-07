@@ -392,6 +392,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         {
                             lock (_destPendingTransactions)
                             {
+                                WorkerMetrics.DecOngoingTransactions();
                                 log.Warning("{destination} marked as DOWN", destination);
                                 _destPendingTransactions[destination].Clear();
                                 return;
