@@ -9,8 +9,14 @@ namespace Matrix.SynapseInterop.Common
     {
         public static void Setup(IConfigurationSection logConfig)
         {
-            if (!Enum.TryParse(logConfig.GetValue<string>("level"), out LogEventLevel level))
+            var sLevel = logConfig.GetValue<string>("level");
+            sLevel = $"{char.ToUpper(sLevel[0])}{sLevel.Substring(1)}";
+
+            if (!Enum.TryParse(sLevel, out LogEventLevel level))
+            {
+                Log.Information("Logging level not configured or understood. Setting to Information");
                 level = LogEventLevel.Information;
+            }
 
             Log.Logger = new LoggerConfiguration()
                         .Filter
