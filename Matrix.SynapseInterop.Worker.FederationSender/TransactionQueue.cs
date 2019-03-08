@@ -30,8 +30,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
-        private readonly object attemptTransactionLock = new object();
-        private readonly SemaphoreSlim concurrentTransactionLock;
+        private readonly SemaphoreSlim _concurrentTransactionLock;
         private Task _eventsProcessing;
         private int _lastEventPoke;
         private Task _presenceProcessing;
@@ -62,7 +61,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (txConcurrency == 0) txConcurrency = 100;
 
-            concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
+            _concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
         }
 
         public void OnEventUpdate(string streamPos)
@@ -95,21 +94,23 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _presenceProcessing = ProcessPendingPresence();
         }
 
-        public void SendEdu(EduEvent obj)
+        public void SendEdu(EduEvent ev)
         {
-            if (obj.destination == _serverName) return;
+            if (ev.destination == _serverName || _backoff.HostIsDown(ev.destination)) return;
 
             // Prod device messages if we've not seen this destination before.
-            if (!_destLastDeviceMsgStreamId.ContainsKey(obj.destination)) SendDeviceMessages(obj.destination);
+            if (!_destLastDeviceMsgStreamId.ContainsKey(ev.destination)) SendDeviceMessages(ev.destination);
 
-            var transaction = GetOrCreateTransactionForDest(obj.destination);
+            var transaction = GetOrCreateTransactionForDest(ev.destination);
 
-            transaction.edus.Add(obj);
-            AttemptTransaction(obj.destination);
+            transaction.edus.Add(ev);
+            AttemptTransaction(ev.destination);
         }
 
         public void SendEdu(EduEvent ev, string key)
         {
+            if (ev.destination == _serverName || _backoff.HostIsDown(ev.destination)) return;
+
             var transaction = GetOrCreateTransactionForDest(ev.destination);
             var existingItem = transaction.edus.FindIndex(edu => edu.InternalKey == key);
 
@@ -122,6 +123,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public void SendDeviceMessages(string destination)
         {
             if (_serverName == destination) return; // Obviously.
+
+            if (_backoff.HostIsDown(destination))
+            {
+                return;
+            }
 
             // Fetch messages for destination
             var messages = GetNewDeviceMessages(destination);
@@ -251,6 +257,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 var hosts = await GetHostsInRoom(item.Key);
 
+                if (hosts.Count == 0)
+                {
+                    continue;
+                }
+
                 foreach (var roomEvent in item)
                 {
                     // TODO: Support send_on_bahalf_of?
@@ -329,7 +340,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private void AttemptTransaction(string destination)
         {
             // Lock here to avoid racing.
-            lock (attemptTransactionLock)
+            lock (this)
             {
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
@@ -358,22 +369,36 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     try
                     {
-                        await concurrentTransactionLock.WaitAsync();
+                        await _concurrentTransactionLock.WaitAsync();
                         WorkerMetrics.IncOngoingTransactions();
                         await _client.SendTransaction(currentTransaction);
-                        concurrentTransactionLock.Release();
+                        _concurrentTransactionLock.Release();
                         ClearDeviceMessages(currentTransaction);
+                        WorkerMetrics.IncTransactionsSent(true, destination);
                     }
                     catch (Exception ex)
                     {
-                        concurrentTransactionLock.Release();
+                        _concurrentTransactionLock.Release();
 
                         log.Warning("Transaction {txnId} {destination} failed: {message}",
                                     currentTransaction.transaction_id, destination, ex.Message);
 
-                        var ts = _backoff.GetBackoffForException(destination, ex);
-
                         WorkerMetrics.IncTransactionsSent(false, destination);
+
+                        var isDown = _backoff.MarkHostIfDown(destination, ex);
+
+                        if (isDown)
+                        {
+                            lock (_destPendingTransactions)
+                            {
+                                WorkerMetrics.DecOngoingTransactions();
+                                log.Warning("{destination} marked as DOWN", destination);
+                                _destPendingTransactions[destination].Clear();
+                                return;
+                            }
+                        }
+
+                        var ts = _backoff.GetBackoffForException(destination, ex);
 
                         // Some transactions cannot be retried.
                         if (ts != TimeSpan.Zero)
@@ -386,6 +411,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             await Task.Delay((int) ts.TotalMilliseconds);
                             continue;
                         }
+
+                        Log.Warning("NOT retrying {txnId} for {destination}", currentTransaction.transaction_id, destination);
                     }
                 }
 
@@ -393,7 +420,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     log.Information("{destination} has come back online", destination);
                 
                 WorkerMetrics.DecOngoingTransactions();
-                WorkerMetrics.IncTransactionsSent(true, destination);
                 WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                 WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
 
@@ -412,6 +438,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList()
                                          .ConvertAll(m => Tuple.Create(m.StreamId, (string) m.content["user_id"]));
+
+            if (deviceLists.Count == 0 && deviceMsgs.Count == 0)
+            {
+                // Optimise early.
+                return;
+            }
 
             using (var db = new SynapseDbContext(_connString))
             {
@@ -507,6 +539,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     // Never include ourselves
                     hosts.Remove(_serverName);
+                    // Don't include dead hosts.
+                    hosts.RemoveWhere(_backoff.HostIsDown);
                     // Now get the hosts for that room.
                     dict.Add(hosts.ToArray(), presence);
                 }
@@ -526,7 +560,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                           hosts.Add(m.UserId.Split(":")[1]));
             }
 
+            // Never include ourselves
             hosts.Remove(_serverName);
+            // Don't include dead hosts.
+            hosts.RemoveWhere(_backoff.HostIsDown);
             return hosts;
         }
 

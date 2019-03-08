@@ -1,10 +1,25 @@
-﻿using Prometheus;
+﻿using System;
+using System.Net.NetworkInformation;
+using System.Threading;
+using Prometheus;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Common
 {
     public static class WorkerMetrics
     {
         private const string PREFIX = "synapse_netcore_worker";
+
+        private static readonly Gauge HttpConnectionsOpen =
+            Metrics.CreateGauge($"dotnet_ongoing_http_sends",
+                                "Number of HTTP connections open",
+                                new GaugeConfiguration
+                                {
+                                    LabelNames = new[]
+                                    {
+                                        "instance"
+                                    }
+                                });
 
         private static readonly Counter TransactionsSent =
             Metrics.CreateCounter($"{PREFIX}_txns_sent",
@@ -106,6 +121,19 @@ namespace Matrix.SynapseInterop.Common
                                               "cache_name"
                                           }
                                   });
+        
+        private static readonly Counter CacheHit =
+            Metrics.CreateCounter($"{PREFIX}_cache_hit",
+                                  "Number of requested records that were missed by a named cache",
+                                  new CounterConfiguration
+                                  {
+                                      LabelNames =
+                                          new[]
+                                          {
+                                              "instance",
+                                              "cache_name"
+                                          }
+                                  });
 
         private static MetricServer _srv;
         private static string _name;
@@ -162,6 +190,21 @@ namespace Matrix.SynapseInterop.Common
         public static void ReportCacheMiss(string cacheName)
         {
             CacheMiss.WithLabels(_name, cacheName).Inc();
+        }
+
+        public static void ReportCacheHit(string cacheName)
+        {
+            CacheHit.WithLabels(_name, cacheName).Inc();
+        }
+
+        public static void IncOngoingHttpConnections()
+        {
+            HttpConnectionsOpen.WithLabels(_name).Inc();
+        }
+        
+        public static void DecOngoingHttpConnections()
+        {
+            HttpConnectionsOpen.WithLabels(_name).Dec();
         }
     }
 }
