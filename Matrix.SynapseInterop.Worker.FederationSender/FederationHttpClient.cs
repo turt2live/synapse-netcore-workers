@@ -24,7 +24,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             PooledConnectionLifetime = TimeSpan.FromSeconds(15)
         })
         {
-            Timeout = TimeSpan.FromSeconds(30);
+            Timeout = TimeSpan.FromMinutes(1);
         }
         
         private static bool CheckCert(object sender,
