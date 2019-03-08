@@ -20,8 +20,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     internal class FederationClient
     {
         private static readonly ILogger log = Log.ForContext<FederationSender>();
-        private readonly bool allowSelfSigned;
-        private readonly HttpClient client;
+        private FederationHttpClient client;
         private readonly HostResolver hostResolver;
         private readonly SigningKey key;
         private readonly string origin;
@@ -29,42 +28,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public FederationClient(string serverName, SigningKey key, IConfigurationSection config)
         {
             origin = serverName;
-        
-            client = new HttpClient(new SocketsHttpHandler
-            {
-                SslOptions = new SslClientAuthenticationOptions
-                {
-                    RemoteCertificateValidationCallback = ServerCertificateValidationCallback
-                },
-                UseProxy = false,
-                UseCookies = false,
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
-                PooledConnectionLifetime = TimeSpan.FromSeconds(30)
-            });
-
-            client.Timeout = TimeSpan.FromMinutes(3);
 
             this.key = key;
             hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008);
-            allowSelfSigned = config.GetValue<bool>("allowSelfSigned");
+            client = new FederationHttpClient(config.GetValue<bool>("allowSelfSigned", false));
         }
-
-        private bool ServerCertificateValidationCallback(object sender,
-                                                         X509Certificate certificate,
-                                                         X509Chain chain,
-                                                         SslPolicyErrors sslpolicyerrors
-        )
-        {
-            if (sslpolicyerrors.HasFlag(SslPolicyErrors.None)) return true;
-
-            if (
-                sslpolicyerrors.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch) &&
-                sslpolicyerrors.HasFlag(SslPolicyErrors.RemoteCertificateNotAvailable) &&
-                allowSelfSigned) return true;
-
-            return false;
-        }
-
+        
         public async Task SendTransaction(Transaction transaction)
         {
             var record = await hostResolver.GetHostRecord(transaction.destination);
@@ -98,8 +67,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             transaction.edus.Count);
 
             HttpResponseMessage resp = await Send(msg, transaction.destination);
- 
-            if (resp.IsSuccessStatusCode) return;
+
+            if (resp.IsSuccessStatusCode)
+            {
+                resp.Content.Dispose();
+                return;
+            }
 
             var error = await resp.Content.ReadAsStringAsync();
             var err = JObject.Parse(error);
@@ -177,7 +150,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 log.Debug("[TX] {destination} Response {timeTaken}ms {statusCode} ",
                                 destination, sw.ElapsedMilliseconds, resp?.StatusCode);
             }
-
             if (resp != null && resp.StatusCode == HttpStatusCode.NotFound)
             {
                 hostResolver.RemovehostRecord(destination);

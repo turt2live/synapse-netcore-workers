@@ -1,10 +1,25 @@
-﻿using Prometheus;
+﻿using System;
+using System.Net.NetworkInformation;
+using System.Threading;
+using Prometheus;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Common
 {
     public static class WorkerMetrics
     {
         private const string PREFIX = "synapse_netcore_worker";
+
+        private static readonly Gauge HttpConnectionsOpen =
+            Metrics.CreateGauge($"dotnet_ongoing_http_sends",
+                                "Number of HTTP connections open",
+                                new GaugeConfiguration
+                                {
+                                    LabelNames = new[]
+                                    {
+                                        "instance"
+                                    }
+                                });
 
         private static readonly Counter TransactionsSent =
             Metrics.CreateCounter($"{PREFIX}_txns_sent",
@@ -180,6 +195,16 @@ namespace Matrix.SynapseInterop.Common
         public static void ReportCacheHit(string cacheName)
         {
             CacheHit.WithLabels(_name, cacheName).Inc();
+        }
+
+        public static void IncOngoingHttpConnections()
+        {
+            HttpConnectionsOpen.WithLabels(_name).Inc();
+        }
+        
+        public static void DecOngoingHttpConnections()
+        {
+            HttpConnectionsOpen.WithLabels(_name).Dec();
         }
     }
 }
