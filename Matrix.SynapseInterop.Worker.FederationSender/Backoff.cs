@@ -61,10 +61,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 // Can't be sure who is at fault, play it safe.
             }
-            else if (ex is HttpRequestException || ex is JsonReaderException)
+            else if (ex is HttpRequestException || ex is JsonReaderException || ex is OperationCanceledException)
             {
                 // This is a failure to route to the host, rather than a HTTP status code failure.
                 // Failing to parse the json is in the same category because it's usually a 404 page.
+                // OperationCanceledException can also be thrown if the request times out.
                 isDown = true;
             }
             else if (ex is TransactionFailureException txEx)
