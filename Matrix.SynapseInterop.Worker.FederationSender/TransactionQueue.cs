@@ -206,7 +206,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 foreach (var host in hostState.Key)
                 {
-                    log.Debug("Sending presence to {host}", host);
                     var transaction = GetOrCreateTransactionForDest(host);
 
                     transaction.edus.Add(new EduEvent
@@ -428,7 +427,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (!TryPopTransaction(destination, out currentTransaction)) break;
             }
 
-            log.Debug("No more transactions for {destination}", destination);
         }
 
         private void ClearDeviceMessages(Transaction transaction)
