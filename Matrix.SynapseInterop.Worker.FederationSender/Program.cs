@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading;
 using Matrix.SynapseInterop.Common;
 using Microsoft.Extensions.Configuration;
 
@@ -8,6 +9,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     internal class Program
     {
         private static IConfiguration _config;
+
+        private static readonly AutoResetEvent _closing = new AutoResetEvent(false);
 
         private static void Main(string[] args)
         {
@@ -32,9 +35,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             
             ServicePointManager.DefaultConnectionLimit = _config.GetSection("Http").GetValue("connectionLimit", 50);
 
+            Console.CancelKeyPress += new ConsoleCancelEventHandler(OnExit);
+
             new FederationSender(_config).Start().Wait();
 
-            Console.ReadKey(true);
+            _closing.WaitOne();
+        }
+
+        protected static void OnExit(object sender, ConsoleCancelEventArgs args)
+        {
+            Console.WriteLine("Exit");
+            _closing.Set();
         }
     }
 }
