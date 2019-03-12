@@ -21,19 +21,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
         private readonly Dictionary<string, SBackoff> _hosts;
-        private readonly Random random;
+        private readonly Random _random;
 
         public Backoff()
         {
             _hosts = new Dictionary<string, SBackoff>();
-            random = new Random();
+            _random = new Random();
         }
 
         public bool ClearBackoff(string host) => _hosts.Remove(host);
 
         public bool HostIsDown(string host)
         {
-            if (_hosts.TryGetValue(host, out var h))
+            if (_hosts.TryGetValue(host, out var h) && h.isDown)
             {
                 return DateTime.Now < h.Ts + h.delayFor;
             }
@@ -94,10 +94,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             else if (isDown)
             {
-                _hosts.TryAdd(host, new SBackoff()
+                _hosts.TryAdd(host, new SBackoff
                 {
                     isDown = true,
-                    delayFor = TimeSpan.FromHours(5) + TimeSpan.FromMinutes(random.Next(0, 59)),
+                    delayFor = TimeSpan.FromHours(5) + TimeSpan.FromMinutes(_random.Next(0, 59)),
                     Ts = DateTime.Now,
                 });
             }
@@ -107,7 +107,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public TimeSpan GetBackoffForException(string host, Exception ex)
         {
-            var multiplier = (double) random.Next(8, 16) / 10;
+            var multiplier = (double) _random.Next(8, 16) / 10;
 
             if (!_hosts.TryGetValue(host, out var backoff))
             {
@@ -147,7 +147,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (txEx.Code == HttpStatusCode.BadGateway)
                     return TimeSpan.Zero;
 
-                else if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
+                if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
                     // This is because the body is mangled and will never succeed, drop it.
