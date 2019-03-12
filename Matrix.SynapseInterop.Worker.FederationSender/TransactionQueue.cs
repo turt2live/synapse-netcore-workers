@@ -354,16 +354,13 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private async Task AttemptNewTransaction(string destination)
         {
-            Transaction currentTransaction;
+            bool retry = false;
+            Transaction currentTransaction = default(Transaction); // To make it happy a
 
-            if (!TryPopTransaction(destination, out currentTransaction))
+            while (retry || TryPopTransaction(destination, out currentTransaction))
             {
-                log.Debug("No transactions for {destination}", destination);
-                return;
-            }
+                retry = false;
 
-            while (true)
-            {
                 using (WorkerMetrics.TransactionDurationTimer())
                 {
                     try
@@ -411,6 +408,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                             currentTransaction.transaction_id, ts.TotalSeconds);
 
                             await Task.Delay((int) ts.TotalMilliseconds);
+                            retry = true;
                             continue;
                         }
 
@@ -423,9 +421,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                 WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
-
-                if (!TryPopTransaction(destination, out currentTransaction)) break;
             }
+            // No transactions for destination
 
         }
 
