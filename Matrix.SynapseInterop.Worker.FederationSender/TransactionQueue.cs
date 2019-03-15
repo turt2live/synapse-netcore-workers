@@ -268,6 +268,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     IPduEvent pduEv;
 
+                    JObject content = await roomEvent.GetContent();
+                    
                     // NOTE: This is an event format version, not room version.
                     if (roomEvent.Version == 1)
                         pduEv = new PduEventV1
@@ -277,7 +279,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     else // Default to latest event format version.
                         pduEv = new PduEventV2();
 
-                    JObject content = await roomEvent.GetContent();
 
                     pduEv.content = content["content"] as JObject;
                     pduEv.origin = _serverName;
