@@ -206,7 +206,7 @@ namespace Matrix.SynapseInterop.Replication
         public void SendRaw(string command)
         {
             var shortCommand = command.Length > 80 ? command.Substring(0, 80) : command;
-            log.Information($"Sending {shortCommand}");
+            log.Debug($"Sending {shortCommand}");
 
             try
             {
