@@ -71,9 +71,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             if (!_eventsProcessing.IsCompleted) return;
 
             log.Debug("Poking ProcessPendingEvents");
+            var timer = WorkerMetrics.FunctionTimer("ProcessPendingEvents");
 
             _eventsProcessing = ProcessPendingEvents().ContinueWith(t =>
             {
+                timer.Dispose();
                 if (t.IsFaulted) log.Error("Failed to process events: {Exception}", t.Exception);
             });
         }
@@ -201,6 +203,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var hostsAndState = await GetInterestedRemotes(presenceSet);
 
             foreach (var hostState in hostsAndState)
+            using (WorkerMetrics.FunctionTimer("ProcessPendingPresence"))
             {
                 var formattedPresence = FormatPresenceContent(hostState.Value);
 
@@ -222,6 +225,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             foreach (var hostState in hostsAndState)
             foreach (var host in hostState.Key)
                 AttemptTransaction(host);
+            }
         }
 
         private async Task ProcessPendingEvents()
@@ -509,6 +513,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var dict = new Dictionary<string[], PresenceState>();
 
             using (var db = new SynapseDbContext(_connString))
+            using (WorkerMetrics.FunctionTimer("GetInterestedRemotes"))
             {
                 // Get the list of rooms shared by these users.
                 // We are intentionally skipping presence lists here.
@@ -541,7 +546,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
             }
 
-            return dict;
+                return dict;
+            }
         }
 
         private async Task<HashSet<string>> GetHostsInRoom(string roomId)
@@ -549,6 +555,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var hosts = new HashSet<string>();
 
             using (var db = new SynapseDbContext(_connString))
+            using (WorkerMetrics.FunctionTimer("GetHostsInRoom"))
             {
                 await db.RoomMemberships.Where(m => m.RoomId == roomId)
                         .ForEachAsync(m =>
@@ -560,6 +567,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Don't include dead hosts.
             hosts.RemoveWhere(_backoff.HostIsDown);
             return hosts;
+            }
         }
 
         private long GetTs()

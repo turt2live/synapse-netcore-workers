@@ -84,6 +84,19 @@ namespace Matrix.SynapseInterop.Common
                                             }
                                     });
 
+        private static readonly Histogram FunctionDuration =
+            Metrics.CreateHistogram($"{PREFIX}_func_duration",
+                                    "Time taken to execute a function",
+                                    new HistogramConfiguration
+                                    {
+                                        LabelNames =
+                                            new[]
+                                            {
+                                                "instance",
+                                                "name"
+                                            }
+                                    });
+
         private static readonly Gauge OngoingTransactions =
             Metrics.CreateGauge($"{PREFIX}_txn_ongoing",
                                 "How many transactions are currently ongoing",
@@ -180,6 +193,11 @@ namespace Matrix.SynapseInterop.Common
         public static ITimer DbCallTimer(string callName)
         {
             return DbCallDuration.WithLabels(_name, callName).NewTimer();
+        }
+        
+        public static ITimer FunctionTimer(string callName)
+        {
+            return FunctionDuration.WithLabels(_name, callName).NewTimer();
         }
 
         public static void ReportCacheSize(string cacheName, int size)
