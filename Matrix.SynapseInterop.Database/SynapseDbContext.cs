@@ -14,7 +14,7 @@ namespace Matrix.SynapseInterop.Database
 
         public DbQuery<EventJson> EventsJson { get; set; }
         public DbQuery<Event> Events { get; set; }
-        public DbQuery<RoomMemberships> RoomMemberships { get; set; }
+        public DbQuery<RoomMembership> RoomMemberships { get; set; }
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
         public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
@@ -33,7 +33,7 @@ namespace Matrix.SynapseInterop.Database
         {
             optionsBuilder.UseNpgsql(_connString);
         }
-
+        
         public List<DeviceContentSet> GetNewDevicesForDestination(string destination, int limit)
         {
             using (WorkerMetrics.DbCallTimer("GetNewDevicesForDestination"))
@@ -77,17 +77,15 @@ namespace Matrix.SynapseInterop.Database
             {
                 var set = new List<EventJsonSet>();
 
+                // No tracking optimisation, we are unlikely to need the same event twice for the federation sender.
                 foreach (var ev in Events
+                                  .AsNoTracking()
                                   .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
                                   .Take(limit)
                                   .OrderBy(e => e.StreamOrdering).ToList())
                 {
-                    var js = EventsJson.SingleOrDefault(e => e.EventId == ev.EventId);
-
-                    if (js != null)
-                        set.Add(new EventJsonSet(ev,
-                                                 js.Json,
-                                                 js.FormatVersion));
+                    var js = EventsJson.AsNoTracking().Where(e => e.EventId == ev.EventId).FirstAsync();
+                    set.Add(new EventJsonSet(ev, js));
                 }
 
                 return set;

@@ -30,7 +30,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
-        private readonly SemaphoreSlim _concurrentTransactionLock;
         private Task _eventsProcessing;
         private int _lastEventPoke;
         private Task _presenceProcessing;
@@ -52,23 +51,18 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _presenceProcessing = Task.CompletedTask;
             _eventsProcessing = Task.CompletedTask;
             _serverName = serverName;
-            _txnId = (int) (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
+            _txnId = (int) (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds;
             _connString = connectionString;
             _lastEventPoke = -1;
             _signingKey = key;
             _backoff = new Backoff();
-            var txConcurrency = clientConfig.GetValue<int>("maxConcurrency");
-
-            if (txConcurrency == 0) txConcurrency = 100;
-
-            _concurrentTransactionLock = new SemaphoreSlim(txConcurrency, txConcurrency);
         }
-
-        public void OnEventUpdate(string streamPos)
+    
+        public bool OnEventUpdate(string streamPos)
         {
             _lastEventPoke = Math.Max(int.Parse(streamPos), _lastEventPoke);
 
-            if (!_eventsProcessing.IsCompleted) return;
+            if (!_eventsProcessing.IsCompleted) return false;
 
             log.Debug("Poking ProcessPendingEvents");
             var timer = WorkerMetrics.FunctionTimer("ProcessPendingEvents");
@@ -78,6 +72,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 timer.Dispose();
                 if (t.IsFaulted) log.Error("Failed to process events: {Exception}", t.Exception);
             });
+
+            return true;
         }
 
         public void SendPresence(List<PresenceState> presenceSet)
@@ -198,33 +194,34 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private async Task ProcessPendingPresence()
         {
-            var presenceSet = _userPresence.Values.ToList();
-            _userPresence.Clear();
-            var hostsAndState = await GetInterestedRemotes(presenceSet);
-
-            foreach (var hostState in hostsAndState)
             using (WorkerMetrics.FunctionTimer("ProcessPendingPresence"))
             {
-                var formattedPresence = FormatPresenceContent(hostState.Value);
+                var presenceSet = _userPresence.Values.ToList();
+                _userPresence.Clear();
+                var hostsAndState = await GetInterestedRemotes(presenceSet);
 
-                foreach (var host in hostState.Key)
+                foreach (var hostState in hostsAndState)
                 {
-                    var transaction = GetOrCreateTransactionForDest(host);
+                    var formattedPresence = FormatPresenceContent(hostState.Value);
 
-                    transaction.edus.Add(new EduEvent
+                    foreach (var host in hostState.Key)
                     {
-                        destination = host,
-                        origin = _serverName,
-                        edu_type = "m.presence",
-                        content = formattedPresence
-                    });
-                }
-            }
+                        var transaction = GetOrCreateTransactionForDest(host);
 
-            // Do this seperate from the above to batch presence together
-            foreach (var hostState in hostsAndState)
-            foreach (var host in hostState.Key)
-                AttemptTransaction(host);
+                        transaction.edus.Add(new EduEvent
+                        {
+                            destination = host,
+                            origin = _serverName,
+                            edu_type = "m.presence",
+                            content = formattedPresence
+                        });
+                    }
+                }
+
+                // Do this seperate from the above to batch presence together
+                foreach (var hostState in hostsAndState)
+                foreach (var host in hostState.Key)
+                    AttemptTransaction(host);
             }
         }
 
@@ -280,29 +277,31 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     else // Default to latest event format version.
                         pduEv = new PduEventV2();
 
-                    pduEv.content = roomEvent.Content["content"] as JObject;
-                    pduEv.origin = _serverName;
-                    pduEv.depth = (long) roomEvent.Content["depth"];
-                    pduEv.auth_events = roomEvent.Content["auth_events"];
-                    pduEv.prev_events = roomEvent.Content["prev_events"];
-                    pduEv.origin_server_ts = (long) roomEvent.Content["origin_server_ts"];
+                    JObject content = await roomEvent.GetContent();
 
-                    if (roomEvent.Content.ContainsKey("redacts")) pduEv.redacts = (string) roomEvent.Content["redacts"];
+                    pduEv.content = content["content"] as JObject;
+                    pduEv.origin = _serverName;
+                    pduEv.depth = (long) content["depth"];
+                    pduEv.auth_events = content["auth_events"];
+                    pduEv.prev_events = content["prev_events"];
+                    pduEv.origin_server_ts = (long) content["origin_server_ts"];
+
+                    if (content.ContainsKey("redacts")) pduEv.redacts = (string) content["redacts"];
 
                     pduEv.room_id = roomEvent.RoomId;
                     pduEv.sender = roomEvent.Sender;
-                    pduEv.prev_state = roomEvent.Content["prev_state"];
+                    pduEv.prev_state = content["prev_state"];
 
-                    if (roomEvent.Content.ContainsKey("state_key"))
-                        pduEv.state_key = (string) roomEvent.Content["state_key"];
+                    if (content.ContainsKey("state_key"))
+                        pduEv.state_key = (string) content["state_key"];
 
-                    pduEv.type = (string) roomEvent.Content["type"];
-                    pduEv.unsigned = (JObject) roomEvent.Content["unsigned"];
-                    pduEv.hashes = roomEvent.Content["hashes"];
+                    pduEv.type = (string) content["type"];
+                    pduEv.unsigned = (JObject) content["unsigned"];
+                    pduEv.hashes = content["hashes"];
 
                     pduEv.signatures = new Dictionary<string, Dictionary<string, string>>();
 
-                    foreach (var sigHosts in (JObject) roomEvent.Content["signatures"])
+                    foreach (var sigHosts in (JObject) content["signatures"])
                     {
                         pduEv.signatures.Add(sigHosts.Key, new Dictionary<string, string>());
 
@@ -369,7 +368,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     try
                     {
-                        await _concurrentTransactionLock.WaitAsync();
                         WorkerMetrics.IncOngoingTransactions();
 
                         try
@@ -380,7 +378,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         }
                         finally
                         {
-                            _concurrentTransactionLock.Release();
                             WorkerMetrics.DecOngoingTransactions();
                         }
                     }
@@ -426,8 +423,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 WorkerMetrics.IncTransactionEventsSent("pdu", destination, currentTransaction.pdus.Count);
                 WorkerMetrics.IncTransactionEventsSent("edu", destination, currentTransaction.edus.Count);
             }
-            // No transactions for destination
-
         }
 
         private void ClearDeviceMessages(Transaction transaction)
@@ -512,39 +507,40 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             var dict = new Dictionary<string[], PresenceState>();
 
-            using (var db = new SynapseDbContext(_connString))
             using (WorkerMetrics.FunctionTimer("GetInterestedRemotes"))
             {
-                // Get the list of rooms shared by these users.
-                // We are intentionally skipping presence lists here.
-                foreach (var presence in presenceSet)
+                using (var db = new SynapseDbContext(_connString))
                 {
-                    var membershipList = await db
-                                              .RoomMemberships
-                                              .Where(m =>
-                                                         m.Membership == "join" &&
-                                                         m.UserId == presence.user_id).ToListAsync();
-
-                    var hosts = new HashSet<string>();
-
-                    // XXX: This is NOT the way to do this, but functions well enough
-                    // for a demo.
-                    foreach (var roomId in membershipList.ConvertAll(m => m.RoomId))
-                        await db.RoomMemberships
-                                .Where(m => m.RoomId == roomId)
-                                .ForEachAsync(m =>
-                                                  hosts.Add(m.UserId
-                                                             .Split(":")
-                                                              [1]));
-
-                    // Never include ourselves
-                    hosts.Remove(_serverName);
-                    // Don't include dead hosts.
-                    hosts.RemoveWhere(_backoff.HostIsDown);
-                    // Now get the hosts for that room.
-                    dict.Add(hosts.ToArray(), presence);
+                    // Get the list of rooms shared by these users.
+                    // We are intentionally skipping presence lists here.
+                    foreach (var presence in presenceSet)
+                    {
+                        var membershipList = await db
+                                                  .RoomMemberships
+                                                  .Where(m =>
+                                                             m.Membership == "join" &&
+                                                             m.UserId == presence.user_id).ToListAsync();
+    
+                        var hosts = new HashSet<string>();
+    
+                        // XXX: This is NOT the way to do this, but functions well enough
+                        // for a demo.
+                        foreach (var roomId in membershipList.ConvertAll(m => m.RoomId))
+                            await db.RoomMemberships
+                                    .Where(m => m.RoomId == roomId)
+                                    .ForEachAsync(m =>
+                                                      hosts.Add(m.UserId
+                                                                 .Split(":")
+                                                                  [1]));
+    
+                        // Never include ourselves
+                        hosts.Remove(_serverName);
+                        // Don't include dead hosts.
+                        hosts.RemoveWhere(_backoff.HostIsDown);
+                        // Now get the hosts for that room.
+                        dict.Add(hosts.ToArray(), presence);
+                    }
                 }
-            }
 
                 return dict;
             }
@@ -552,21 +548,22 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private async Task<HashSet<string>> GetHostsInRoom(string roomId)
         {
-            var hosts = new HashSet<string>();
-
-            using (var db = new SynapseDbContext(_connString))
             using (WorkerMetrics.FunctionTimer("GetHostsInRoom"))
             {
-                await db.RoomMemberships.Where(m => m.RoomId == roomId)
-                        .ForEachAsync(m =>
-                                          hosts.Add(m.UserId.Split(":")[1]));
-            }
+                var hosts = new HashSet<string>();
 
-            // Never include ourselves
-            hosts.Remove(_serverName);
-            // Don't include dead hosts.
-            hosts.RemoveWhere(_backoff.HostIsDown);
-            return hosts;
+                using (var db = new SynapseDbContext(_connString))
+                {
+                    await db.RoomMemberships.Where(m => m.RoomId == roomId)
+                            .ForEachAsync(m =>
+                                              hosts.Add(m.UserId.Split(":")[1]));
+                }
+
+                // Never include ourselves
+                hosts.Remove(_serverName);
+                // Don't include dead hosts.
+                hosts.RemoveWhere(_backoff.HostIsDown);
+                return hosts;
             }
         }
 
