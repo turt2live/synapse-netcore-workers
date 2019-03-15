@@ -84,8 +84,7 @@ namespace Matrix.SynapseInterop.Database
                                   .Take(limit)
                                   .OrderBy(e => e.StreamOrdering).ToList())
                 {
-                    var js = EventsJson.AsNoTracking().Where(e => e.EventId == ev.EventId).FirstAsync();
-                    set.Add(new EventJsonSet(ev, js));
+                    set.Add(new EventJsonSet(ev));
                 }
 
                 return set;

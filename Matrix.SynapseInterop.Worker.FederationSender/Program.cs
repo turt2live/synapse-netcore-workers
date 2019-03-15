@@ -2,6 +2,7 @@
 using System.Net;
 using System.Threading;
 using Matrix.SynapseInterop.Common;
+using Matrix.SynapseInterop.Database;
 using Microsoft.Extensions.Configuration;
 
 namespace Matrix.SynapseInterop.Worker.FederationSender
@@ -36,6 +37,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             ServicePointManager.DefaultConnectionLimit = _config.GetSection("Http").GetValue("connectionLimit", 50);
 
             Console.CancelKeyPress += new ConsoleCancelEventHandler(OnExit);
+            SynapseDbContext.DefaultConnectionString = _config.GetConnectionString("synapse");
+
 
             new FederationSender(_config).Start().Wait();
 
