@@ -235,16 +235,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             using (var db = new SynapseDbContext(_connString))
             {
                 last = (await db.FederationStreamPosition.SingleAsync(m => m.Type == "events")).StreamId;
-                events = db.GetAllNewEventsStream(last, top, MAX_PDUS_PER_TRANSACTION);
+                events = db.GetAllNewEventsStream(last, top, MAX_PDUS_PER_TRANSACTION).ToList();
             }
 
-            if (events.Count == 0)
+            if (!events.Any())
             {
                 log.Debug("No new events to handle");
                 return;
             }
 
-            if (events.Count == MAX_PDUS_PER_TRANSACTION)
+            if (events.Count() == MAX_PDUS_PER_TRANSACTION)
             {
                 log.Warning("More than {Max} events behind", MAX_PDUS_PER_TRANSACTION);
                 top = events.Last().StreamOrdering;

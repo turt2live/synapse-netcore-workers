@@ -71,23 +71,16 @@ namespace Matrix.SynapseInterop.Database
             }
         }
 
-        public List<EventJsonSet> GetAllNewEventsStream(int fromId, int currentId, int limit)
+        public IEnumerable<EventJsonSet> GetAllNewEventsStream(int fromId, int currentId, int limit)
         {
             using (WorkerMetrics.DbCallTimer("GetAllNewEventsStream"))
             {
-                var set = new List<EventJsonSet>();
-
                 // No tracking optimisation, we are unlikely to need the same event twice for the federation sender.
-                foreach (var ev in Events
-                                  .AsNoTracking()
-                                  .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
-                                  .Take(limit)
-                                  .OrderBy(e => e.StreamOrdering).ToList())
-                {
-                    set.Add(new EventJsonSet(ev));
-                }
-
-                return set;
+                return Events
+                      .AsNoTracking()
+                      .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
+                      .Take(limit)
+                      .OrderBy(e => e.StreamOrdering).Select(ev => new EventJsonSet(ev));
             }
         }
     }
