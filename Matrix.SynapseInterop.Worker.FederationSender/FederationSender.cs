@@ -69,11 +69,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 var res = db.FederationStreamPosition.SingleOrDefault(r => r.Type == type);
 
-                if (res != null)
-                {
-                    res.StreamId = id;
-                    db.SaveChanges();
-                }
+                if (res == null) return;
+                res.StreamId = id;
+                db.SaveChanges();
             }
         }
 
