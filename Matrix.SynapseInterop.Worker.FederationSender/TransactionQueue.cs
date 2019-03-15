@@ -34,7 +34,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private int _lastEventPoke;
         private Task _presenceProcessing;
         private SigningKey _signingKey;
-        private int _txnId;
+        private ulong _txnId;
 
         public TransactionQueue(string serverName,
                                 string connectionString,
@@ -51,7 +51,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _presenceProcessing = Task.CompletedTask;
             _eventsProcessing = Task.CompletedTask;
             _serverName = serverName;
-            _txnId = (int) (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds;
+            _txnId = (ulong) (DateTime.Now - new DateTime(1970, 1, 1)).TotalMilliseconds;
             _connString = connectionString;
             _lastEventPoke = -1;
             _signingKey = key;
