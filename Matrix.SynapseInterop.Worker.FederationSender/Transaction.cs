@@ -8,9 +8,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public struct Transaction
     {
-        public string transaction_id;
+        [JsonIgnore] public string TxnId;
+        
+        [JsonIgnore] public string Destination;
         public string origin;
-        public string destination;
         public long origin_server_ts;
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]

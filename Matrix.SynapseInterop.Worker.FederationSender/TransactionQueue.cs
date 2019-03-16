@@ -389,7 +389,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     catch (Exception ex)
                     {
                         log.Warning("Transaction {txnId} {destination} failed: {message}",
-                                    currentTransaction.transaction_id, destination, ex.Message);
+                                    currentTransaction.TxnId, destination, ex.Message);
 
                         WorkerMetrics.IncTransactionsSent(false, destination);
 
@@ -411,14 +411,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         if (ts != TimeSpan.Zero)
                         {
                             log.Information("Retrying txn {txnId} in {secs}s",
-                                            currentTransaction.transaction_id, ts.TotalSeconds);
+                                            currentTransaction.TxnId, ts.TotalSeconds);
 
                             await Task.Delay((int) ts.TotalMilliseconds);
                             retry = true;
                             continue;
                         }
 
-                        Log.Warning("NOT retrying {txnId} for {destination}", currentTransaction.transaction_id, destination);
+                        Log.Warning("NOT retrying {txnId} for {destination}", currentTransaction.TxnId, destination);
                     }
                 }
 
@@ -448,7 +448,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 if (deviceMsgs.Count != 0)
                 {
-                    _destLastDeviceMsgStreamId[transaction.destination] = deviceMsgs.Max();
+                    _destLastDeviceMsgStreamId[transaction.Destination] = deviceMsgs.Max();
                     var deviceMsgEntries = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
 
                     if (deviceMsgEntries.Any())
@@ -464,7 +464,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (deviceLists.Count == 0) return;
 
-                _destLastDeviceListStreamId[transaction.destination] = deviceLists.Max(e => e.Item1);
+                _destLastDeviceListStreamId[transaction.Destination] = deviceLists.Max(e => e.Item1);
 
                 var deviceListEntries = db.DeviceListsOutboundPokes
                                           .Where(m =>
@@ -616,8 +616,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 pdus = new List<IPduEvent>(),
                 origin = _serverName,
                 origin_server_ts = GetTs(),
-                transaction_id = _txnId.ToString(),
-                destination = dest
+                TxnId = _txnId.ToString(),
+                Destination = dest
             };
 
             list.AddLast(transaction);

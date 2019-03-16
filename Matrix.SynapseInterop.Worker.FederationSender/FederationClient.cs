@@ -36,11 +36,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         
         public async Task SendTransaction(Transaction transaction)
         {
-            var record = await hostResolver.GetHostRecord(transaction.destination);
+            var record = await hostResolver.GetHostRecord(transaction.Destination);
 
             var uri = new UriBuilder(record.GetUri())
             {
-                Path = $"/_matrix/federation/v1/send/{transaction.transaction_id}/",
+                Path = $"/_matrix/federation/v1/send/{transaction.TxnId}/",
                 Scheme = "https"
             };
 
@@ -53,7 +53,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             msg.Headers.Host = record.GetHost();
 
             var body = SigningKey.SortPropertiesAlphabetically(JObject.FromObject(transaction));
-            SignRequest(msg, transaction.destination, body);
+            SignRequest(msg, transaction.Destination, body);
             var json = JsonConvert.SerializeObject(body, Formatting.None);
 
             var content = new StringContent(json,
@@ -63,10 +63,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             msg.Content = content;
 
             log.Debug("[TX] {destination} => /send/{txnId} PDUs={pduCount} EDUs={eduCount}"
-                            , transaction.destination, transaction.transaction_id, transaction.pdus.Count,
+                            , transaction.Destination, transaction.TxnId, transaction.pdus.Count,
                             transaction.edus.Count);
 
-            HttpResponseMessage resp = await Send(msg, transaction.destination);
+            HttpResponseMessage resp = await Send(msg, transaction.Destination);
 
             if (resp.IsSuccessStatusCode)
             {
@@ -99,7 +99,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
             }
 
-            throw new TransactionFailureException(transaction.destination, resp.StatusCode, err);
+            throw new TransactionFailureException(transaction.Destination, resp.StatusCode, err);
         }
 
         private async Task<JObject> GetVersion(string destination)
