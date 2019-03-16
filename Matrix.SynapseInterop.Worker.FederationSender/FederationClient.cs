@@ -63,8 +63,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             msg.Content = content;
 
             log.Debug("[TX] {destination} => /send/{txnId} PDUs={pduCount} EDUs={eduCount}"
-                            , transaction.Destination, transaction.TxnId, transaction.pdus.Count,
-                            transaction.edus.Count);
+                      , transaction.Destination, transaction.TxnId, transaction.pdus.Count,
+                      transaction.edus.Count);
 
             HttpResponseMessage resp = await Send(msg, transaction.Destination);
 

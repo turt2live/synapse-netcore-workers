@@ -17,7 +17,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             // Because we will be doing a LOT of http requests.
             ServicePointManager.ReusePort = true;
-
             _config = new ConfigurationBuilder()
                      .AddJsonFile("appsettings.default.json", true, true)
                      .AddJsonFile("appsettings.json", true, true)
@@ -38,7 +37,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             Console.CancelKeyPress += new ConsoleCancelEventHandler(OnExit);
             SynapseDbContext.DefaultConnectionString = _config.GetConnectionString("synapse");
-
 
             new FederationSender(_config).Start().Wait();
 

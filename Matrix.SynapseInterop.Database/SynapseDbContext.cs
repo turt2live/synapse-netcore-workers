@@ -4,6 +4,7 @@ using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Database.SynapseModels;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace Matrix.SynapseInterop.Database
 {
@@ -31,7 +32,9 @@ namespace Matrix.SynapseInterop.Database
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseNpgsql(_connString);
+            var ctx = Log.ForContext<SynapseDbContext>();
+            SerilogLoggerFactory s = new SerilogLoggerFactory();
+            optionsBuilder.UseNpgsql(_connString).UseLoggerFactory(s);
         }
         
         public List<DeviceContentSet> GetNewDevicesForDestination(string destination, int limit)
@@ -78,9 +81,9 @@ namespace Matrix.SynapseInterop.Database
                 // No tracking optimisation, we are unlikely to need the same event twice for the federation sender.
                 return Events
                       .AsNoTracking()
+                      .OrderBy(e => e.StreamOrdering)
                       .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
-                      .Take(limit)
-                      .OrderBy(e => e.StreamOrdering).Select(ev => new EventJsonSet(ev));
+                      .Take(limit).Select(ev => new EventJsonSet(ev));
             }
         }
     }
