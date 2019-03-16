@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
+using Matrix.SynapseInterop.Common.Extensions;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.SynapseModels;
 using Matrix.SynapseInterop.Replication.Structures;
@@ -251,16 +252,20 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             log.Information("Processing from {last} to {top}", last, top);
+            var hostsToSendTo = new HashSet<string>();
 
             // Skip any events that didn't come from us.
             foreach (var item in events.Where(e => IsMineId(e.Sender)).GroupBy(e => e.RoomId))
-            {
+            {   
+                //TODO: I guess we need to fetch the destinations for each event in a room, because someone may have got banned in between.
                 var hosts = await GetHostsInRoom(item.Key);
 
                 if (hosts.Count == 0)
                 {
                     continue;
                 }
+                
+                hostsToSendTo.UnionWith(hosts);
 
                 foreach (var roomEvent in item)
                 {
@@ -278,7 +283,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         };
                     else // Default to latest event format version.
                         pduEv = new PduEventV2();
-
 
                     pduEv.content = content["content"] as JObject;
                     pduEv.origin = _serverName;
@@ -310,19 +314,18 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             pduEv.signatures[sigHosts.Key].Add(sigs.Key, sigs.Value.Value<string>());
                     }
 
-                    //TODO: I guess we need to fetch the destinations for each event in a room, because someone may have got banned in between.
                     foreach (var host in hosts)
                     {
                         var transaction = GetOrCreateTransactionForDest(host);
-
                         transaction.pdus.Add(pduEv);
-                        // We are handling this elsewhere.
-#pragma warning disable 4014
-                        AttemptTransaction(host);
-#pragma warning restore 4014
                     }
                 }
             }
+            
+            // We are handling this elsewhere.
+#pragma warning disable 4014
+            hostsToSendTo.ForEach(h => AttemptNewTransaction(h));
+#pragma warning restore 4014
 
             using (var db = new SynapseDbContext(_connString))
             {
@@ -361,6 +364,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             bool retry = false;
             Transaction currentTransaction = default(Transaction); // To make it happy a
 
+            // Once a transaction is popped, it is sealed and can no longer hold events.
             while (retry || TryPopTransaction(destination, out currentTransaction))
             {
                 retry = false;
