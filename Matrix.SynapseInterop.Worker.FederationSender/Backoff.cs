@@ -78,6 +78,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 else if (txEx.Code == HttpStatusCode.NotFound || txEx.Code == HttpStatusCode.BadGateway)
                     isDown = true;
             }
+            else if (ex is UriFormatException)
+            {
+                // This is either a bug with us, or a host in the room has an invalid hostname. In either case, backoff.
+                isDown = true;
+            }
             
             if (_hosts.TryGetValue(host, out var h))
             {
