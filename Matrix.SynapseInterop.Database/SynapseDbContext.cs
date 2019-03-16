@@ -13,6 +13,7 @@ namespace Matrix.SynapseInterop.Database
     {
         private readonly string _connString;
         public static string DefaultConnectionString { get; set; }
+        private static readonly SerilogLoggerFactory LoggerFactory = new SerilogLoggerFactory(Log.ForContext<SynapseDbContext>());
 
         public DbQuery<EventJson> EventsJson { get; set; }
         public DbQuery<Event> Events { get; set; }
@@ -33,9 +34,7 @@ namespace Matrix.SynapseInterop.Database
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            var ctx = Log.ForContext<SynapseDbContext>();
-            SerilogLoggerFactory s = new SerilogLoggerFactory();
-            optionsBuilder.UseNpgsql(_connString).UseLoggerFactory(s);
+            optionsBuilder.UseNpgsql(_connString).UseLoggerFactory(LoggerFactory);
         }
         
         public List<DeviceContentSet> GetNewDevicesForDestination(string destination, int limit)

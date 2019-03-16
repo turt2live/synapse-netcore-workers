@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.Extensions.Configuration;
 using Serilog;
+using Serilog.Core;
 using Serilog.Events;
 
 namespace Matrix.SynapseInterop.Common
@@ -21,9 +22,9 @@ namespace Matrix.SynapseInterop.Common
             Log.Logger = new LoggerConfiguration()
                         .MinimumLevel.Debug()
                         .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-                        .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Debug)
+                        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Information)
                         .Filter.ByIncludingOnly(e => e.Level >= level)
-                        .Enrich.With(new EFLogEnricher())
+                        .Enrich.With(new EfLogEnricher())
                         .WriteTo
                         .Console(outputTemplate:
                                  "{Timestamp:yy-MM-dd HH:mm:ss.fff} {Level:u3} {SourceContext:lj} {@Properties} {Message:lj}{NewLine}{Exception}")
