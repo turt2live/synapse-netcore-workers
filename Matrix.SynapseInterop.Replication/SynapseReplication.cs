@@ -221,7 +221,7 @@ namespace Matrix.SynapseInterop.Replication
 
         private void SendPing(object context)
         {
-            SendRaw("PING " + DateTime.Now.ToBinary());
+            SendRaw("PING " + (DateTime.Now - new DateTime(1970, 1, 1)).TotalMilliseconds);
         }
 
         public void SubscribeStream(string streamName, string position)
