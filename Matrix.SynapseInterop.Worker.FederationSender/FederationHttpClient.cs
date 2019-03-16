@@ -2,7 +2,6 @@ using System;
 using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
@@ -16,7 +15,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = (sender, certificate, chain, sslpolicyerrors) => 
-                    CheckCert(sender, certificate, chain, sslpolicyerrors, allowSelfSigned)
+                    CheckCert(sslpolicyerrors, allowSelfSigned)
             },
             UseProxy = false,
             UseCookies = false,
@@ -27,10 +26,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             Timeout = TimeSpan.FromMinutes(1);
         }
         
-        private static bool CheckCert(object sender,
-                                      X509Certificate certificate,
-                                      X509Chain chain,
-                                      SslPolicyErrors sslpolicyerrors,
+        private static bool CheckCert(SslPolicyErrors sslpolicyerrors,
                                       bool allowSelfSigned
         )
         {
@@ -44,7 +40,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             WorkerMetrics.IncOngoingHttpConnections();
-            var res = await base.SendAsync(request, cancellationToken);
+            var res = await base.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             WorkerMetrics.DecOngoingHttpConnections();
             return res;
         }

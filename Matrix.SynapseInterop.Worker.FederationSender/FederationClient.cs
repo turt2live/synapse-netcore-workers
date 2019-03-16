@@ -131,10 +131,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             try
             {
                 log.Debug("[TX] {destination} PUT {uri} Host={hostHeader}"
-                                , destination, msg.RequestUri, msg.Headers.Host);
+                          , destination, msg.RequestUri, msg.Headers.Host);
 
                 sw.Start();
-                resp = await client.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
+                resp = await client.SendAsync(msg, CancellationToken.None);
             }
             catch (HttpRequestException ex)
             {
