@@ -491,12 +491,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private JObject FormatPresenceContent(PresenceState state)
         {
-            var now = (DateTime.Now - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+            var now = (DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
             var obj = new JObject();
             obj.Add("presence", state.state);
             obj.Add("user_id", state.user_id);
 
-            if (state.last_active_ts != 0) obj.Add("last_active_ago", (int) Math.Round(now - state.last_active_ts));
+            if (state.last_active_ts != 0) obj.Add("last_active_ago", (long) Math.Round(now - state.last_active_ts));
 
             if (state.status_msg != null && state.state != "offline") obj.Add("status_msg", state.status_msg);
 
