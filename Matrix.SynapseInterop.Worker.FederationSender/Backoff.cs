@@ -102,7 +102,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 _hosts.TryAdd(host, new SBackoff
                 {
                     isDown = true,
-                    delayFor = TimeSpan.FromHours(5) + TimeSpan.FromMinutes(_random.Next(0, 59)),
+                    delayFor = TimeSpan.FromHours(5) + TimeSpan.FromSeconds(_random.Next(0, 60 * 60)),
                     Ts = DateTime.Now,
                 });
             }
