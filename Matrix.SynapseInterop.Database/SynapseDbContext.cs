@@ -5,6 +5,7 @@ using Matrix.SynapseInterop.Database.SynapseModels;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using Serilog.AspNetCore;
 
 namespace Matrix.SynapseInterop.Database
 {

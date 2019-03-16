@@ -65,12 +65,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (!_eventsProcessing.IsCompleted) return false;
 
-            log.Debug("Poking ProcessPendingEvents");
+            log.Debug("Running ProcessPendingEvents");
             var timer = WorkerMetrics.FunctionTimer("ProcessPendingEvents");
 
             _eventsProcessing = ProcessPendingEvents().ContinueWith(t =>
             {
+                var duration = timer.ObserveDuration().TotalMilliseconds;
                 timer.Dispose();
+                log.Debug("Ran ProcessPendingEvents {duration}ms", duration);
                 if (t.IsFaulted) log.Error("Failed to process events: {Exception}", t.Exception);
             });
 
@@ -336,7 +338,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
 
             // Still behind?
-            if (events.Count == MAX_PDUS_PER_TRANSACTION)
+            if (top < _lastEventPoke)
             {
                 log.Information("Calling ProcessPendingEvents again because we are still behind");
                 await ProcessPendingEvents();
