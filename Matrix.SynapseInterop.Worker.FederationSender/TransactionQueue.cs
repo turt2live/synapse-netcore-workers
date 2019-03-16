@@ -8,6 +8,7 @@ using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.SynapseModels;
+using Matrix.SynapseInterop.Replication.DataRows;
 using Matrix.SynapseInterop.Replication.Structures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -174,6 +175,37 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             });
 
             AttemptTransaction(destination);
+        }
+
+        public async Task OnReciept(ReceiptStreamRow row)
+        {
+            if (!IsMineId(row.UserId))
+            {
+                // Only handle ours
+                return;
+            }
+
+            using (WorkerMetrics.FunctionTimer("OnReciept"))
+            {
+                (await GetHostsInRoom(row.RoomId)).ForEach(host =>
+                {
+                    var ev = new EduEvent
+                    {
+                        destination = host,
+                        edu_type = "m.receipt",
+                        content = JObject.FromObject(new RoomReceipt
+                        {
+                            MRead = new UserReadReceipt
+                            {
+                                event_ids = new [] {row.EventId},
+                                data = row.Data.ToObject<RoomReceiptMetadata>(),
+                            }
+                        }),
+                    };
+
+                    SendEdu(ev);
+                });
+            }
         }
 
         private Tuple<List<DeviceFederationOutbox>, List<DeviceContentSet>> GetNewDeviceMessages(string destination)
