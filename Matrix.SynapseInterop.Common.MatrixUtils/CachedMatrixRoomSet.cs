@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Matrix.SynapseInterop.Database;
@@ -35,7 +36,8 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
     public class CachedMatrixRoom
     {
         private readonly string _roomId;
-        public List<string> Membership { get; private set; }
+        public string[] Membership { get; private set; }
+        public string[] Hosts { get; private set; }
         
         public CachedMatrixRoom(string roomId)
         {
@@ -47,7 +49,9 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
         {
             using (var db = new SynapseDbContext())
             {
-                Membership = db.RoomMemberships.Where(r => r.RoomId == _roomId).Select(r => r.UserId).ToList();
+                var members = db.RoomMemberships.Where(r => r.RoomId == _roomId).Select(r => r.UserId);
+                Hosts = members.Select(m => m.Split(":", StringSplitOptions.None)[1]).ToArray();
+                Membership = members.ToArray();
             }
         }
     }

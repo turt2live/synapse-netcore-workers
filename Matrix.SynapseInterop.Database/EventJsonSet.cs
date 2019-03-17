@@ -18,6 +18,7 @@ namespace Matrix.SynapseInterop.Database
             RoomId = baseEvent.RoomId;
             StreamOrdering = baseEvent.StreamOrdering;
             Sender = baseEvent.Sender;
+            Type = baseEvent.Type;
             _json = null;
             Version = -1;
         }

@@ -206,7 +206,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 var presenceSet = _userPresence.Values.ToList();
                 _userPresence.Clear();
-                var hostsAndState = await GetInterestedRemotes(presenceSet);
+                var hostsAndState = GetInterestedRemotes(presenceSet);
 
                 foreach (var hostState in hostsAndState)
                 {
@@ -446,13 +446,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void ClearDeviceMessages(Transaction transaction)
         {
+            
             var deviceMsgs = transaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList()
                                         .ConvertAll(m => m.StreamId);
 
             var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList()
                                          .ConvertAll(m => Tuple.Create(m.StreamId, (string) m.content["user_id"]));
 
-            if (deviceLists.Count == 0 && deviceMsgs.Count == 0)
+            if (!deviceLists.Any() && !deviceMsgs.Any())
             {
                 // Optimise early.
                 return;
@@ -522,7 +523,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         /// <summary>
         ///     Get a set of remote hosts interested in this presence.
         /// </summary>
-        private async Task<Dictionary<string[], PresenceState>> GetInterestedRemotes(List<PresenceState> presenceSet)
+        private Dictionary<string[], PresenceState> GetInterestedRemotes(List<PresenceState> presenceSet)
         {
             var dict = new Dictionary<string[], PresenceState>();
 
@@ -537,8 +538,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     // XXX: This is NOT the way to do this, but functions well enough
                     // for a demo.
                     foreach (var roomId in _userMembershipCache.GetJoinedRoomsForUser(presence.user_id))
-                    foreach (var membership in _roomCache.GetRoom(roomId).Membership)
-                        hosts.Add(membership.Split(":")[1]);
+                        hosts.UnionWith(new HashSet<string>(_roomCache.GetRoom(roomId).Hosts));
 
                     // Never include ourselves
                     hosts.Remove(_serverName);
