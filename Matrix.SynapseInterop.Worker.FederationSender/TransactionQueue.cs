@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
@@ -589,7 +588,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (!_destPendingTransactions.TryAdd(dest, list))
                 {
                     list = _destPendingTransactions[dest];
-                };
+                }
             }
             else
             {
