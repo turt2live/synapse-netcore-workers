@@ -49,7 +49,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
         {
             using (var db = new SynapseDbContext())
             {
-                var members = db.RoomMemberships.Where(r => r.RoomId == _roomId).Select(r => r.UserId);
+                var members = db.RoomMemberships.Where(r => r.RoomId == _roomId && r.Membership == "join").Select(r => r.UserId);
                 Hosts = members.Select(m => m.Split(":", StringSplitOptions.None)[1]).ToArray();
                 Membership = members.ToArray();
             }
