@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
@@ -20,6 +21,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
+        private readonly TimeSpan minDelayBetweenTxns = TimeSpan.FromMilliseconds(150);
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly Backoff _backoff;
         private readonly FederationClient _client;
@@ -27,6 +29,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, Task> _destOngoingTrans;
+        private readonly Dictionary<string, DateTime> _destLastTxnTime;
         private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
         private readonly CachedMatrixRoomSet _roomCache;
         private readonly string _serverName;
@@ -374,12 +377,28 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Lock here to avoid racing.
             lock (this)
             {
+                var now = DateTime.Now;
+
+                if (_destLastTxnTime.TryGetValue(destination, out var lastTime))
+                {
+                    var diff = lastTime - now;
+
+                    if (diff < minDelayBetweenTxns)
+                    {
+                        log.Debug("Delaying task for {delay}ms", diff.TotalMilliseconds);
+                        Task.Delay(diff).ContinueWith(_ => AttemptTransaction(destination));
+                        return;
+                    }
+                }
+
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
                     if (!_destOngoingTrans[destination].IsCompleted) return;
                     _destOngoingTrans.Remove(destination);
                 }
 
+                _destLastTxnTime.Remove(destination);
+                _destLastTxnTime.Add(destination, now);
                 var t = AttemptNewTransaction(destination);
                 _destOngoingTrans.Add(destination, t);
             }
@@ -458,7 +477,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void ClearDeviceMessages(Transaction transaction)
         {
-            
             var deviceMsgs = transaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList()
                                         .ConvertAll(m => m.StreamId);
 
