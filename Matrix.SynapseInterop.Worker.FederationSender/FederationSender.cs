@@ -54,7 +54,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _eventStream.PositionUpdate /**/ += OnEventPositionUpdate;
             _stream_position = await GetFederationPos("federation");
 
-            saveFedToken = new Timer(100)
+            saveFedToken = new Timer(150)
             {
                 AutoReset = false,
                 Enabled = false,
@@ -79,13 +79,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void UpdateFederationPos(string type, int id)
         {
-            using (var db = new SynapseDbContext(connectionString))
+            lock (this)
             {
-                log.Information("Saving {type} position {pos}", type, id);
-                var res = db.FederationStreamPosition.SingleOrDefault(r => r.Type == type);
-                if (res == null) return;
-                res.StreamId = id;
-                db.SaveChangesAsync();
+                using (var db = new SynapseDbContext(connectionString))
+                {
+                    log.Information("Saving {type} position {pos}", type, id);
+                    var res = db.FederationStreamPosition.SingleOrDefault(r => r.Type == type);
+                    if (res == null) return;
+                    res.StreamId = id;
+                    db.SaveChanges();
+                }
             }
         }
 
