@@ -252,7 +252,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return;
             }
 
-            if (events.Count() == MAX_PDUS_PER_TRANSACTION)
+            if (events.Count == MAX_PDUS_PER_TRANSACTION)
             {
                 log.Warning("More than {Max} events behind", MAX_PDUS_PER_TRANSACTION);
                 top = events.Last().StreamOrdering;
@@ -352,7 +352,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Still behind?
             if (top < _lastEventPoke)
             {
-                log.Information("Calling ProcessPendingEvents again because we are still behind");
+                log.Information("Calling ProcessPendingEvents again because we are still behind {top} < {_lastEventPoke}", top, _lastEventPoke);
                 await ProcessPendingEvents();
             }
         }
