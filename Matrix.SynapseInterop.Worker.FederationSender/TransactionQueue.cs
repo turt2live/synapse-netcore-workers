@@ -21,6 +21,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
+        // If a room has more hosts than MAX_HOSTS_FOR_PRESENCE, ignore that room.
+        private const int MaxHostsForPresence = 40;
         private readonly TimeSpan minDelayBetweenTxns = TimeSpan.FromMilliseconds(150);
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly Backoff _backoff;
@@ -574,11 +576,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     var hosts = new HashSet<string>();
 
-                    // XXX: This is NOT the way to do this, but functions well enough
-                    // for a demo.
-
                     foreach (var room in _roomCache.GetJoinedRoomsForUser(presence.user_id))
                     {
+                        if (room.Hosts.Length > MaxHostsForPresence)
+                        {
+                            // Don't include rooms with losts of hosts, because it slows shit down.
+                            // TODO: This is not very nice, but things like HQ exist. Fundamentally this
+                            // is a bug with presence, and we should really fix presence. This is the middle ground
+                            // between turning it all off, and rampant presence.
+                            continue;
+                        }
+
                         hosts.UnionWith(room.Hosts);
                     }
 
