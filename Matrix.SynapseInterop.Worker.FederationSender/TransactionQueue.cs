@@ -62,6 +62,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _signingKey = key;
             _backoff = new Backoff();
             _roomCache = new CachedMatrixRoomSet();
+            _destLastTxnTime = new Dictionary<string, DateTime>();
         }
     
         public bool OnEventUpdate(string streamPos)
