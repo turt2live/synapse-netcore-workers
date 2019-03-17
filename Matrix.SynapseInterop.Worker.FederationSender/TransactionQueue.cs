@@ -538,7 +538,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     // for a demo.
                     foreach (var roomId in _userMembershipCache.GetJoinedRoomsForUser(presence.user_id))
                     foreach (var membership in _roomCache.GetRoom(roomId).Membership)
-                        hosts.Add(membership.UserId.Split(":")[1]);
+                        hosts.Add(membership.Split(":")[1]);
 
                     // Never include ourselves
                     hosts.Remove(_serverName);
