@@ -386,8 +386,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     if (diff < minDelayBetweenTxns)
                     {
-                        log.Debug("Delaying task for {delay}ms", diff.TotalMilliseconds);
-                        Task.Delay(diff).ContinueWith(_ => AttemptTransaction(destination));
+                        var delay = (minDelayBetweenTxns - diff);
+                        log.Debug("Delaying task for {delay}ms", delay.TotalMilliseconds);
+                        Task.Delay(delay).ContinueWith(_ => AttemptTransaction(destination));
                         return;
                     }
                 }
