@@ -29,7 +29,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, Task> _destOngoingTrans;
         private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
         private readonly CachedMatrixRoomSet _roomCache;
-        private readonly UserRoomMembershipCache _userMembershipCache;
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
@@ -58,7 +57,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _connString = connectionString;
             _lastEventPoke = -1;
             _signingKey = key;
-            _userMembershipCache = new UserRoomMembershipCache();
             _backoff = new Backoff();
             _roomCache = new CachedMatrixRoomSet();
         }
@@ -237,11 +235,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
 
                 // Do this seperate from the above to batch presence together
-                var txns = 0;
                 foreach (var hostState in hostsAndState)
                 foreach (var host in hostState.Key)
                 {
-                    txns++;
                     AttemptTransaction(host);
                 }
 
@@ -280,8 +276,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Invalidate any caches if we see a membership event of any kind.
             foreach (var memberEv in events.Where(e => e.Type == "m.room.member"))
             {
-                var stateKey = (await memberEv.GetContent())["state_key"].Value<string>();
-                _userMembershipCache.InvalidateCache(stateKey);
+                if (_roomCache.InvalidateRoom(memberEv.RoomId))
+                    log.Debug("Invalidated cache for {roomId}", memberEv.RoomId);
             }
             
             // Skip any events that didn't come from us.
@@ -553,8 +549,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     // XXX: This is NOT the way to do this, but functions well enough
                     // for a demo.
-                    foreach (var roomId in _userMembershipCache.GetJoinedRoomsForUser(presence.user_id))
-                        hosts.UnionWith(new HashSet<string>(_roomCache.GetRoom(roomId).Hosts));
+
+                    foreach (var room in _roomCache.GetJoinedRoomsForUser(presence.user_id))
+                    {
+                        hosts.UnionWith(room.Hosts);
+                    }
 
                     // Never include ourselves
                     hosts.Remove(_serverName);
