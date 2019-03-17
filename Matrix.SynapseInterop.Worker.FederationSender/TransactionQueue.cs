@@ -86,13 +86,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public void SendPresence(List<PresenceState> presenceSet)
         {
             foreach (var presence in presenceSet)
+            {
                 // Only send presence about our own users.
                 if (IsMineId(presence.user_id))
+                {
                     if (!_userPresence.TryAdd(presence.user_id, presence))
                     {
                         _userPresence.Remove(presence.user_id);
                         _userPresence.Add(presence.user_id, presence);
                     }
+                }
+            }
 
             if (!_presenceProcessing.IsCompleted) return;
 
@@ -203,6 +207,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             using (WorkerMetrics.FunctionTimer("ProcessPendingPresence"))
             {
+                log.Debug("Processing presence");
                 var presenceSet = _userPresence.Values.ToList();
                 _userPresence.Clear();
                 var hostsAndState = GetInterestedRemotes(presenceSet);
@@ -229,6 +234,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 foreach (var hostState in hostsAndState)
                 foreach (var host in hostState.Key)
                     AttemptTransaction(host);
+
+                log.Debug("Finished processing presence");
             }
         }
 
