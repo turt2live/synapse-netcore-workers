@@ -382,11 +382,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (_destLastTxnTime.TryGetValue(destination, out var lastTime))
                 {
-                    var diff = lastTime - now;
+                    var diff = now - lastTime;
 
                     if (diff < minDelayBetweenTxns)
                     {
-                        var delay = (minDelayBetweenTxns - diff);
+                        var delay = minDelayBetweenTxns - diff;
                         log.Debug("Delaying task for {delay}ms", delay.TotalMilliseconds);
                         Task.Delay(delay).ContinueWith(_ => AttemptTransaction(destination));
                         return;
