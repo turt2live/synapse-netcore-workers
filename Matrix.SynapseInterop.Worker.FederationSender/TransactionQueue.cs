@@ -207,13 +207,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             using (WorkerMetrics.FunctionTimer("ProcessPendingPresence"))
             {
-                log.Debug("Processing presence");
+                log.Debug("Running ProcessPendingPresence");
                 var presenceSet = _userPresence.Values.ToList();
                 _userPresence.Clear();
                 var hostsAndState = GetInterestedRemotes(presenceSet);
+                var i = 0;
+                var edus = 0;
 
                 foreach (var hostState in hostsAndState)
                 {
+                    i++;
+                    log.Debug("Processing presence {i}/{total}", i, hostsAndState.Count);
                     var formattedPresence = FormatPresenceContent(hostState.Value);
 
                     foreach (var host in hostState.Key)
@@ -227,15 +231,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             edu_type = "m.presence",
                             content = formattedPresence
                         });
+
+                        edus++;
                     }
                 }
 
                 // Do this seperate from the above to batch presence together
+                var txns = 0;
                 foreach (var hostState in hostsAndState)
                 foreach (var host in hostState.Key)
+                {
+                    txns++;
                     AttemptTransaction(host);
+                }
 
-                log.Debug("Finished processing presence");
+                log.Debug("Finished ProcessPendingPresence. Queued {edus} EDUs", edus);
             }
         }
 
