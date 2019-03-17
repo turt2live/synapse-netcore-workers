@@ -1,12 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Database\Matrix.SynapseInterop.Database.csproj" />
   </ItemGroup>
-
 </Project>
