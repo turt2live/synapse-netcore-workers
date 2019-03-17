@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
+using Matrix.SynapseInterop.Common.MatrixUtils;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.SynapseModels;
 using Matrix.SynapseInterop.Replication.Structures;
@@ -28,6 +29,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, Task> _destOngoingTrans;
         private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
+        private readonly CachedMatrixRoomSet _roomCache;
+        private readonly UserRoomMembershipCache _userMembershipCache;
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
@@ -56,7 +59,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _connString = connectionString;
             _lastEventPoke = -1;
             _signingKey = key;
+            _userMembershipCache = new UserRoomMembershipCache();
             _backoff = new Backoff();
+            _roomCache = new CachedMatrixRoomSet();
         }
     
         public bool OnEventUpdate(string streamPos)
@@ -255,7 +260,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             log.Information("Processing from {last} to {top}", last, top);
             var hostsToSendTo = new HashSet<string>();
-
+            
+            // Invalidate any caches if we see a membership event of any kind.
+            foreach (var memberEv in events.Where(e => e.Type == "m.room.member"))
+            {
+                var stateKey = (await memberEv.GetContent())["state_key"].Value<string>();
+                _userMembershipCache.InvalidateCache(stateKey);
+            }
+            
             // Skip any events that didn't come from us.
             foreach (var item in events.Where(e => IsMineId(e.Sender)).GroupBy(e => e.RoomId))
             {   
@@ -516,37 +528,24 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             using (WorkerMetrics.FunctionTimer("GetInterestedRemotes"))
             {
-                using (var db = new SynapseDbContext(_connString))
+                // Get the list of rooms shared by these users.
+                // We are intentionally skipping presence lists here.
+                foreach (var presence in presenceSet)
                 {
-                    // Get the list of rooms shared by these users.
-                    // We are intentionally skipping presence lists here.
-                    foreach (var presence in presenceSet)
-                    {
-                        var membershipList = await db
-                                                  .RoomMemberships
-                                                  .Where(m =>
-                                                             m.Membership == "join" &&
-                                                             m.UserId == presence.user_id).ToListAsync();
-    
-                        var hosts = new HashSet<string>();
-    
-                        // XXX: This is NOT the way to do this, but functions well enough
-                        // for a demo.
-                        foreach (var roomId in membershipList.ConvertAll(m => m.RoomId))
-                            await db.RoomMemberships
-                                    .Where(m => m.RoomId == roomId)
-                                    .ForEachAsync(m =>
-                                                      hosts.Add(m.UserId
-                                                                 .Split(":")
-                                                                  [1]));
-    
-                        // Never include ourselves
-                        hosts.Remove(_serverName);
-                        // Don't include dead hosts.
-                        hosts.RemoveWhere(_backoff.HostIsDown);
-                        // Now get the hosts for that room.
-                        dict.Add(hosts.ToArray(), presence);
-                    }
+                    var hosts = new HashSet<string>();
+
+                    // XXX: This is NOT the way to do this, but functions well enough
+                    // for a demo.
+                    foreach (var roomId in _userMembershipCache.GetJoinedRoomsForUser(presence.user_id))
+                    foreach (var membership in _roomCache.GetRoom(roomId).Membership)
+                        hosts.Add(membership.UserId.Split(":")[1]);
+
+                    // Never include ourselves
+                    hosts.Remove(_serverName);
+                    // Don't include dead hosts.
+                    hosts.RemoveWhere(_backoff.HostIsDown);
+                    // Now get the hosts for that room.
+                    dict.Add(hosts.ToArray(), presence);
                 }
 
                 return dict;

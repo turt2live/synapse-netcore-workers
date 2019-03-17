@@ -16,5 +16,8 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
 
         [Column("sender")]
         public string Sender { get; set; }
+
+        [Column("type")]
+        public string Type { get; set; }
     }
 }
