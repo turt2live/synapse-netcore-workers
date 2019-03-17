@@ -23,7 +23,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             PooledConnectionLifetime = TimeSpan.FromSeconds(15)
         })
         {
-            Timeout = TimeSpan.FromMinutes(1);
+            Timeout = TimeSpan.FromMinutes(1.5);
         }
         
         private static bool CheckCert(SslPolicyErrors sslpolicyerrors,
