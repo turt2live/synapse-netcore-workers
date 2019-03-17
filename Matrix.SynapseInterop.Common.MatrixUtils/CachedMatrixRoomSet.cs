@@ -35,7 +35,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
     public class CachedMatrixRoom
     {
         private readonly string _roomId;
-        public List<RoomMembership> Membership { get; private set; }
+        public List<string> Membership { get; private set; }
         
         public CachedMatrixRoom(string roomId)
         {
@@ -47,7 +47,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
         {
             using (var db = new SynapseDbContext())
             {
-                Membership = db.RoomMemberships.Where(r => r.RoomId == _roomId).ToList();
+                Membership = db.RoomMemberships.Where(r => r.RoomId == _roomId).Select(r => r.UserId).ToList();
             }
         }
     }

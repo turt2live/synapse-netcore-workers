@@ -8,11 +8,11 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
 {
     public class UserRoomMembershipCache
     {
-        private readonly Dictionary<string, List<RoomMembership>> _joinedRooms; // userId => RoomMembership
+        private readonly Dictionary<string, List<string>> _joinedRooms; // userId => roomId
         
         public UserRoomMembershipCache()
         {
-            _joinedRooms = new Dictionary<string, List<RoomMembership>>();
+            _joinedRooms = new Dictionary<string, List<string>>();
         }
 
         public List<string> GetJoinedRoomsForUser(string userId)
@@ -20,7 +20,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
             if (_joinedRooms.TryGetValue(userId, out var memberships))
             {
                 WorkerMetrics.ReportCacheHit("user_room_membership_cache");
-                return memberships.Where(m => m.Membership == "join").Select(m => m.RoomId).ToList();
+                return memberships;
             }
 
             WorkerMetrics.ReportCacheMiss("user_room_membership_cache");
@@ -30,10 +30,10 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
                 var membershipList = db.RoomMemberships
                                        .Where(m =>
                                                   m.Membership == "join" &&
-                                                  m.UserId == userId);
+                                                  m.UserId == userId).Select(m => m.RoomId).ToList();
 
-                _joinedRooms.Add(userId, membershipList.ToList());
-                return membershipList.Where(m => m.Membership == "join").Select(m => m.RoomId).ToList();
+                _joinedRooms.Add(userId, membershipList);
+                return membershipList;
             }
         }
 
