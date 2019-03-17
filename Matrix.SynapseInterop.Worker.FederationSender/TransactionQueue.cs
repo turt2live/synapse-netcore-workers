@@ -89,14 +89,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             foreach (var presence in presenceSet)
             {
+                log.Debug("Got new presence for {userId} = {state} ({last_active})",
+                          presence.user_id,
+                          presence.state,
+                          presence.last_active_ts);
+
                 // Only send presence about our own users.
-                if (IsMineId(presence.user_id))
+                if (!IsMineId(presence.user_id))
                 {
-                    if (!_userPresence.TryAdd(presence.user_id, presence))
-                    {
-                        _userPresence.Remove(presence.user_id);
-                        _userPresence.Add(presence.user_id, presence);
-                    }
+                    continue;
+                }
+
+                if (!_userPresence.TryAdd(presence.user_id, presence))
+                {
+                    _userPresence.Remove(presence.user_id);
+                    _userPresence.Add(presence.user_id, presence);
                 }
             }
 
