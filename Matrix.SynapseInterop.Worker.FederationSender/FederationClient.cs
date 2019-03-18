@@ -74,8 +74,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return;
             }
 
-            var error = await resp.Content.ReadAsStringAsync();
-            var err = JObject.Parse(error);
+            if (resp.Content.Headers.ContentType.MediaType != "application/json")
+            {
+                throw new TransactionFailureException(transaction.Destination, resp.StatusCode);
+            }
+            
+            var err = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
             {
@@ -89,8 +93,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         log.Warning("Got invalid signature");
 
                         log.Debug("Auth: {auth}\nBody: {body}",
-                                        msg.Headers.Authorization.Parameter,
-                                        body.ToString(Formatting.Indented));
+                                  msg.Headers.Authorization.Parameter,
+                                  body.ToString(Formatting.Indented));
                     }
                 }
                 catch

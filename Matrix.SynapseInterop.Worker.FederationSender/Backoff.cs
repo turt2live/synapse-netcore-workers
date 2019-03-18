@@ -75,7 +75,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     // This means they don't want to federate with us :(
                     isDown = true;
                 }
-                else if (txEx.Code == HttpStatusCode.NotFound || txEx.Code == HttpStatusCode.BadGateway)
+                else if (txEx.Code == HttpStatusCode.NotFound)
                     isDown = true;
             }
             else if (ex is UriFormatException)
