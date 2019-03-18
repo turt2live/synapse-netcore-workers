@@ -355,11 +355,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     
                     HashSet<string> hostsToSend = new HashSet<string>(hosts);
 
-                    if (pduEv.type == "m.room.member")
+                    if (pduEv.type == "m.room.member" && !string.IsNullOrEmpty(pduEv.state_key))
                     {
-                        // If this is a member event, ensure that the destination gets it
-                        var dest = pduEv.content?["state_key"].Value<string>().Split(":")[1];
-                        hostsToSend.Add(dest);
+                        var dest = pduEv.state_key.Split(":");
+
+                        if (dest.Length > 1)
+                        {
+                            // If this is a member event, ensure that the destination gets it
+                            hostsToSend.Add(dest[1]);
+                        }
                     }
 
                     foreach (var host in hostsToSend)
