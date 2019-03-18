@@ -10,13 +10,15 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     internal struct SBackoff
     {
-        public TimeSpan delayFor;
+        public TimeSpan DelayFor;
         public DateTime Ts;
-        public bool isDown;
+        public int Strikes;
+        public bool IsDown;
     }
 
     public class Backoff
     {
+        private const int StrikesToMarkHostDown = 5;
         private static readonly TimeSpan MaxDelay = TimeSpan.FromDays(1);
         private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
@@ -33,9 +35,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public bool HostIsDown(string host)
         {
-            if (_hosts.TryGetValue(host, out var h) && h.isDown)
+            if (_hosts.TryGetValue(host, out var h) && h.IsDown)
             {
-                return DateTime.Now < h.Ts + h.delayFor;
+                return DateTime.Now < h.Ts + h.DelayFor;
             }
 
             return false;
@@ -50,6 +52,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public bool MarkHostIfDown(string host, Exception ex)
         {
             var isDown = false;
+            var strike = false;
 
             if (ex is SocketException sockEx)
             {
@@ -77,6 +80,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 }
                 else if (txEx.Code == HttpStatusCode.NotFound)
                     isDown = true;
+                else if (txEx.Code == HttpStatusCode.BadGateway || txEx.Code == HttpStatusCode.ServiceUnavailable)
+                {
+                    strike = true;
+                }
             }
             else if (ex is UriFormatException)
             {
@@ -86,12 +93,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             
             if (_hosts.TryGetValue(host, out var h))
             {
-                h.isDown = isDown;
+                h.Strikes = strike ? h.Strikes + 1 : 0;
+
+                if (h.Strikes >= StrikesToMarkHostDown)
+                {
+                    isDown = true;
+                    h.Strikes = 0;
+                }
+                
+                h.IsDown = isDown;
+                
                 h.Ts = DateTime.Now;
 
                 if (!isDown)
                 {
-                    h.delayFor = TimeSpan.Zero;
+                    h.DelayFor = TimeSpan.Zero;
                 }
 
                 _hosts.Remove(host);
@@ -101,8 +117,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 _hosts.TryAdd(host, new SBackoff
                 {
-                    isDown = true,
-                    delayFor = TimeSpan.FromHours(5) + TimeSpan.FromSeconds(_random.Next(0, 60 * 60)),
+                    IsDown = true,
+                    DelayFor = TimeSpan.FromHours(5) + TimeSpan.FromSeconds(_random.Next(0, 60 * 60)),
                     Ts = DateTime.Now,
                 });
             }
@@ -118,7 +134,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 backoff = new SBackoff
                 {
-                    delayFor = TimeSpan.Zero
+                    DelayFor = TimeSpan.Zero
                 };
             }
             else
@@ -150,28 +166,28 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     return TimeSpan.Zero;
 
                 if (txEx.Code == HttpStatusCode.BadGateway)
-                    backoff.delayFor += NormalBackoff * multiplier;
+                    backoff.DelayFor += NormalBackoff * multiplier;
 
                 if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
-                    backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
+                    backoff.DelayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
                 else if (txEx.Code == HttpStatusCode.Unauthorized && txEx.Error != "")
                     // This is because the body is mangled and will never succeed, drop it.
                     return TimeSpan.Zero;
                 else if (txEx.Code >= HttpStatusCode.InternalServerError)
-                    backoff.delayFor += NormalBackoff * multiplier;
-                else backoff.delayFor += NormalBackoff * multiplier;
+                    backoff.DelayFor += NormalBackoff * multiplier;
+                else backoff.DelayFor += NormalBackoff * multiplier;
             }
             else
             {
                 // Eh, it's a error.
-                backoff.delayFor += NormalBackoff * multiplier;
+                backoff.DelayFor += NormalBackoff * multiplier;
             }
 
             _hosts.Add(host, backoff);
 
-            backoff.delayFor = TimeSpan.FromMilliseconds(Math.Min(MaxDelay.TotalMilliseconds, backoff.delayFor.TotalMilliseconds));
+            backoff.DelayFor = TimeSpan.FromMilliseconds(Math.Min(MaxDelay.TotalMilliseconds, backoff.DelayFor.TotalMilliseconds));
 
-            return backoff.delayFor;
+            return backoff.DelayFor;
         }
     }
 }
