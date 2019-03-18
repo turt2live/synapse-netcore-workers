@@ -297,7 +297,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             foreach (var item in events.Where(e => IsMineId(e.Sender)).GroupBy(e => e.RoomId))
             {   
                 //TODO: I guess we need to fetch the destinations for each event in a room, because someone may have got banned in between.
-                var hosts = await GetHostsInRoom(item.Key);
+                var hosts = GetHostsInRoom(item.Key);
 
                 if (hosts.Count == 0)
                 {
@@ -352,8 +352,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         foreach (var sigs in (JObject) sigHosts.Value)
                             pduEv.signatures[sigHosts.Key].Add(sigs.Key, sigs.Value.Value<string>());
                     }
+                    
+                    HashSet<string> hostsToSend = new HashSet<string>(hosts);
 
-                    foreach (var host in hosts)
+                    if (pduEv.type == "m.room.member")
+                    {
+                        // If this is a member event, ensure that the destination gets it
+                        var dest = pduEv.content?["state_key"].Value<string>().Split(":")[1];
+                        hostsToSend.Add(dest);
+                    }
+
+                    foreach (var host in hostsToSend)
                     {
                         var transaction = GetOrCreateTransactionForDest(host);
                         transaction.pdus.Add(pduEv);
@@ -586,7 +595,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             // between turning it all off, and rampant presence.
                             continue;
                         }
-
+    
                         hosts.UnionWith(room.Hosts);
                     }
 
