@@ -37,12 +37,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                    allowSelfSigned;
         }
 
-        public override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             WorkerMetrics.IncOngoingHttpConnections();
-            var res = await base.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            WorkerMetrics.DecOngoingHttpConnections();
-            return res;
+
+            try
+            {
+                var t = base.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                return t;
+            }
+            finally
+            {
+                WorkerMetrics.DecOngoingHttpConnections();
+            }
         }
     }
 }
