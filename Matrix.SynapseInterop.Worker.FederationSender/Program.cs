@@ -17,6 +17,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         {
             // Because we will be doing a LOT of http requests.
             ServicePointManager.ReusePort = true;
+
             _config = new ConfigurationBuilder()
                      .AddJsonFile("appsettings.default.json", true, true)
                      .AddJsonFile("appsettings.json", true, true)
@@ -35,7 +36,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             
             ServicePointManager.DefaultConnectionLimit = _config.GetSection("Http").GetValue("connectionLimit", 50);
 
-            Console.CancelKeyPress += new ConsoleCancelEventHandler(OnExit);
+            Console.CancelKeyPress += OnExit;
             SynapseDbContext.DefaultConnectionString = _config.GetConnectionString("synapse");
 
             new FederationSender(_config).Start().Wait();
