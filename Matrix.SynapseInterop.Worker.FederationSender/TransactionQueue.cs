@@ -111,7 +111,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (!_presenceProcessing.IsCompleted) return;
 
-            _presenceProcessing = ProcessPendingPresence();
+            _presenceProcessing = Task.Run(() => { ProcessPendingPresence(); });
         }
 
         public void SendEdu(EduEvent ev)
@@ -214,7 +214,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
         }
 
-        private async Task ProcessPendingPresence()
+        private void ProcessPendingPresence()
         {
             using (WorkerMetrics.FunctionTimer("ProcessPendingPresence"))
             {
@@ -611,19 +611,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
         }
 
-        private async Task<HashSet<string>> GetHostsInRoom(string roomId)
+        private HashSet<string> GetHostsInRoom(string roomId)
         {
             using (WorkerMetrics.FunctionTimer("GetHostsInRoom"))
             {
-                var hosts = new HashSet<string>();
-
-                using (var db = new SynapseDbContext(_connString))
-                {
-                    await db.RoomMemberships.Where(m => m.RoomId == roomId)
-                            .ForEachAsync(m =>
-                                              hosts.Add(m.UserId.Split(":")[1]));
-                }
-
+                var hosts = new HashSet<string>(_roomCache.GetRoom(roomId).Hosts);
                 // Never include ourselves
                 hosts.Remove(_serverName);
                 // Don't include dead hosts.
