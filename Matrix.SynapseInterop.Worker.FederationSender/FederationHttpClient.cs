@@ -21,8 +21,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             UseCookies = false,
             ResponseDrainTimeout = TimeSpan.FromSeconds(15),
             ConnectTimeout = TimeSpan.FromSeconds(30),
-            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
-            PooledConnectionLifetime = TimeSpan.FromSeconds(5),
+            PooledConnectionIdleTimeout = TimeSpan.Zero,
+            PooledConnectionLifetime = TimeSpan.Zero,
         })
         {
             Timeout = TimeSpan.FromMinutes(1);
@@ -41,10 +41,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         public override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            WorkerMetrics.IncOngoingHttpConnections();
-
             try
             {
+                WorkerMetrics.IncOngoingHttpConnections();
                 var t = base.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 return t;
             }
