@@ -19,8 +19,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             },
             UseProxy = false,
             UseCookies = false,
+            ResponseDrainTimeout = TimeSpan.FromSeconds(15),
+            ConnectTimeout = TimeSpan.FromSeconds(30),
             PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
-            PooledConnectionLifetime = TimeSpan.FromSeconds(15)
+            PooledConnectionLifetime = TimeSpan.FromSeconds(5),
         })
         {
             Timeout = TimeSpan.FromMinutes(1);
