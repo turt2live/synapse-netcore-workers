@@ -30,8 +30,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             origin = serverName;
 
             this.key = key;
-            hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008);
             client = new FederationHttpClient(config.GetValue<bool>("allowSelfSigned", false));
+            hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008, client);
         }
         
         public async Task SendTransaction(Transaction transaction)
@@ -152,8 +152,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 sw.Stop();
 
                 log.Debug("[TX] {destination} Response {timeTaken}ms {statusCode} ",
-                                destination, sw.ElapsedMilliseconds, resp?.StatusCode);
+                          destination, sw.ElapsedMilliseconds, resp?.StatusCode);
             }
+
             if (resp != null && resp.StatusCode == HttpStatusCode.NotFound)
             {
                 hostResolver.RemoveHostRecord(destination);

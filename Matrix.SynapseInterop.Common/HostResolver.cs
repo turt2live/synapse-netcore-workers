@@ -73,9 +73,9 @@ namespace Matrix.SynapseInterop.Common
         private readonly HttpClient _wKclient;
         private SemaphoreSlim _srvSemaphore;
 
-        public HostResolver(int defaultPort)
+        public HostResolver(int defaultPort, HttpClient client = null)
         {
-            _wKclient = new HttpClient(new HttpClientHandler()) {Timeout = TimeSpan.FromSeconds(15)};
+            _wKclient = client ?? new HttpClient(new HttpClientHandler()) {Timeout = TimeSpan.FromSeconds(15)};
 
             _hosts = new ConcurrentDictionary<string, HostRecord>();
             _defaultPort = defaultPort;
