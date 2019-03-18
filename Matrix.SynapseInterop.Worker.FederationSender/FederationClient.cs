@@ -144,7 +144,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 //TODO: This is probably a little extreme.
                 log.Warning("Failed to reach {destination} {message}", destination, ex.Message);
-                hostResolver.RemovehostRecord(destination);
+                hostResolver.RemoveHostRecord(destination);
                 throw;
             }
             finally
@@ -156,7 +156,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             if (resp != null && resp.StatusCode == HttpStatusCode.NotFound)
             {
-                hostResolver.RemovehostRecord(destination);
+                hostResolver.RemoveHostRecord(destination);
             }
 
             return resp;

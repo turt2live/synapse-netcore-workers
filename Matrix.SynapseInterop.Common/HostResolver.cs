@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -67,7 +68,7 @@ namespace Matrix.SynapseInterop.Common
     {
         private static readonly ILogger log = Log.ForContext<HostResolver>();
         private readonly int _defaultPort;
-        private readonly Dictionary<string, HostRecord> _hosts;
+        private readonly ConcurrentDictionary<string, HostRecord> _hosts;
         private readonly LookupClient _lookupClient;
         private readonly HttpClient _wKclient;
         private SemaphoreSlim _srvSemaphore;
@@ -76,7 +77,7 @@ namespace Matrix.SynapseInterop.Common
         {
             _wKclient = new HttpClient(new HttpClientHandler()) {Timeout = TimeSpan.FromSeconds(15)};
 
-            _hosts = new Dictionary<string, HostRecord>();
+            _hosts = new ConcurrentDictionary<string, HostRecord>();
             _defaultPort = defaultPort;
             _lookupClient = new LookupClient();
             _srvSemaphore = new SemaphoreSlim(500, 500);
@@ -94,23 +95,22 @@ namespace Matrix.SynapseInterop.Common
 
             WorkerMetrics.ReportCacheMiss("hostresolver_hosts");
 
-            if (hasValue) _hosts.Remove(destination);
+            if (hasValue) _hosts.TryRemove(destination, out _);
 
             using (WorkerMetrics.HostLookupDurationTimer())
             {
                 var res = await ResolveHost(destination);
                 host = new HostRecord(res.Item1, res.Item2, destination);
-                _hosts.Add(destination, host);
+                _hosts.TryAdd(destination, host);
             }
 
             WorkerMetrics.ReportCacheSize("hostresolver_hosts", _hosts.Count);
             
             // Test if the host is down.
-
             return host;
         }
 
-        public void RemovehostRecord(string destination) => _hosts.Remove(destination);
+        public void RemoveHostRecord(string destination) => _hosts.TryRemove(destination, out _);
 
         private async Task<Tuple<Uri, SrvRecord[]>> ResolveHost(string destination)
         {
