@@ -150,7 +150,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     return TimeSpan.Zero;
 
                 if (txEx.Code == HttpStatusCode.BadGateway)
-                    return TimeSpan.Zero;
+                    backoff.delayFor += NormalBackoff * multiplier;
 
                 if (txEx.BackoffFor > 0 && txEx.Code == HttpStatusCode.TooManyRequests)
                     backoff.delayFor = TimeSpan.FromMilliseconds(txEx.BackoffFor + 30000);
