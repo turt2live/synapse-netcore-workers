@@ -20,7 +20,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int StrikesToMarkHostDown = 5;
         private static readonly TimeSpan MaxDelay = TimeSpan.FromDays(1);
-        private static readonly TimeSpan HttpReqBackoff = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
         private readonly Dictionary<string, SBackoff> _hosts;
         private readonly Random _random;
@@ -90,7 +89,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 // This is either a bug with us, or a host in the room has an invalid hostname. In either case, backoff.
                 isDown = true;
             }
-            
+
             if (_hosts.TryGetValue(host, out var h))
             {
                 h.Strikes = strike ? h.Strikes + 1 : 0;
@@ -109,6 +108,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 {
                     h.DelayFor = TimeSpan.Zero;
                 }
+                else if (h.DelayFor != TimeSpan.Zero)
+                {
+                    h.DelayFor = TimeSpan.FromMinutes(14) + TimeSpan.FromSeconds(_random.Next(0, 60));
+                }
+                else if (h.DelayFor < MaxDelay)
+                {
+                    h.DelayFor *= 2;
+
+                    if (h.DelayFor >= MaxDelay)
+                    {
+                        h.DelayFor = MaxDelay;
+                    }
+                }
 
                 _hosts.Remove(host);
                 _hosts.TryAdd(host, h);
@@ -118,7 +130,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 _hosts.TryAdd(host, new SBackoff
                 {
                     IsDown = true,
-                    DelayFor = TimeSpan.FromHours(5) + TimeSpan.FromSeconds(_random.Next(0, 60 * 60)),
+                    DelayFor = TimeSpan.FromMinutes(14) + TimeSpan.FromSeconds(_random.Next(0, 60)),
                     Ts = DateTime.Now,
                 });
             }
