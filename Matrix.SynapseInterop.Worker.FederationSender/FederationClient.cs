@@ -68,42 +68,45 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             HttpResponseMessage resp = await Send(msg, transaction.Destination);
 
-            if (resp.IsSuccessStatusCode)
+            // Ensure the response is disposed.
+            using (resp)
             {
-                resp.Content.Dispose();
-                return;
-            }
-
-            if (resp.Content.Headers.ContentType.MediaType != "application/json")
-            {
-                throw new TransactionFailureException(transaction.Destination, resp.StatusCode);
-            }
-            
-            var err = JObject.Parse(await resp.Content.ReadAsStringAsync());
-
-            if (resp.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                try
+                if (resp.IsSuccessStatusCode)
                 {
-                    var errCode = (string) err["errcode"];
-                    var errorString = (string) err["error"];
+                    return;
+                }
+    
+                if (resp.Content.Headers.ContentType.MediaType != "application/json")
+                {
+                    throw new TransactionFailureException(transaction.Destination, resp.StatusCode);
+                }
+                
+                var err = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
-                    if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
+                if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    try
                     {
-                        log.Warning("Got invalid signature");
+                        var errCode = (string) err["errcode"];
+                        var errorString = (string) err["error"];
 
-                        log.Debug("Auth: {auth}\nBody: {body}",
-                                  msg.Headers.Authorization.Parameter,
-                                  body.ToString(Formatting.Indented));
+                        if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
+                        {
+                            log.Warning("Got invalid signature");
+
+                            log.Debug("Auth: {auth}\nBody: {body}",
+                                      msg.Headers.Authorization.Parameter,
+                                      body.ToString(Formatting.Indented));
+                        }
+                    }
+                    catch
+                    {
+                        // ignored
                     }
                 }
-                catch
-                {
-                    // ignored
-                }
-            }
 
-            throw new TransactionFailureException(transaction.Destination, resp.StatusCode, err);
+                throw new TransactionFailureException(transaction.Destination, resp.StatusCode, err);
+            }
         }
 
         private async Task<JObject> GetVersion(string destination)
