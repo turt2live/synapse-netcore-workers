@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
+using Matrix.SynapseInterop.Common.MatrixUtils;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.SynapseModels;
 using Matrix.SynapseInterop.Replication.DataRows;
@@ -21,6 +22,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
+        // If a room has more hosts than MAX_HOSTS_FOR_PRESENCE, ignore that room.
+        private const int MaxHostsForPresence = 40;
+        private readonly TimeSpan minDelayBetweenTxns = TimeSpan.FromMilliseconds(150);
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly Backoff _backoff;
         private readonly FederationClient _client;
@@ -28,7 +32,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, Task> _destOngoingTrans;
+        private readonly Dictionary<string, DateTime> _destLastTxnTime;
         private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
+        private readonly CachedMatrixRoomSet _roomCache;
         private readonly string _serverName;
 
         private readonly Dictionary<string, PresenceState> _userPresence;
@@ -58,6 +64,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _lastEventPoke = -1;
             _signingKey = key;
             _backoff = new Backoff();
+            _roomCache = new CachedMatrixRoomSet();
+            _destLastTxnTime = new Dictionary<string, DateTime>();
         }
     
         public bool OnEventUpdate(string streamPos)
@@ -83,17 +91,28 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public void SendPresence(List<PresenceState> presenceSet)
         {
             foreach (var presence in presenceSet)
+            {
+                log.Debug("Got new presence for {userId} = {state} ({last_active})",
+                          presence.user_id,
+                          presence.state,
+                          presence.last_active_ts);
+
                 // Only send presence about our own users.
-                if (IsMineId(presence.user_id))
-                    if (!_userPresence.TryAdd(presence.user_id, presence))
-                    {
-                        _userPresence.Remove(presence.user_id);
-                        _userPresence.Add(presence.user_id, presence);
-                    }
+                if (!IsMineId(presence.user_id))
+                {
+                    continue;
+                }
+
+                if (!_userPresence.TryAdd(presence.user_id, presence))
+                {
+                    _userPresence.Remove(presence.user_id);
+                    _userPresence.Add(presence.user_id, presence);
+                }
+            }
 
             if (!_presenceProcessing.IsCompleted) return;
 
-            _presenceProcessing = ProcessPendingPresence();
+            _presenceProcessing = Task.Run(() => { ProcessPendingPresence(); });
         }
 
         public void SendEdu(EduEvent ev)
@@ -227,16 +246,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
         }
 
-        private async Task ProcessPendingPresence()
+        private void ProcessPendingPresence()
         {
             using (WorkerMetrics.FunctionTimer("ProcessPendingPresence"))
             {
+                log.Debug("Running ProcessPendingPresence");
                 var presenceSet = _userPresence.Values.ToList();
                 _userPresence.Clear();
-                var hostsAndState = await GetInterestedRemotes(presenceSet);
+                var hostsAndState = GetInterestedRemotes(presenceSet);
+                var i = 0;
+                var edus = 0;
 
                 foreach (var hostState in hostsAndState)
                 {
+                    i++;
+                    log.Debug("Processing presence {i}/{total}", i, hostsAndState.Count);
                     var formattedPresence = FormatPresenceContent(hostState.Value);
 
                     foreach (var host in hostState.Key)
@@ -250,13 +274,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             edu_type = "m.presence",
                             content = formattedPresence
                         });
+
+                        edus++;
                     }
                 }
 
                 // Do this seperate from the above to batch presence together
                 foreach (var hostState in hostsAndState)
                 foreach (var host in hostState.Key)
+                {
                     AttemptTransaction(host);
+                }
+
+                log.Debug("Finished ProcessPendingPresence. Queued {edus} EDUs", edus);
             }
         }
 
@@ -279,7 +309,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return;
             }
 
-            if (events.Count() == MAX_PDUS_PER_TRANSACTION)
+            if (events.Count == MAX_PDUS_PER_TRANSACTION)
             {
                 log.Warning("More than {Max} events behind", MAX_PDUS_PER_TRANSACTION);
                 top = events.Last().StreamOrdering;
@@ -287,12 +317,19 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             log.Information("Processing from {last} to {top}", last, top);
             var hostsToSendTo = new HashSet<string>();
-
+            
+            // Invalidate any caches if we see a membership event of any kind.
+            foreach (var memberEv in events.Where(e => e.Type == "m.room.member"))
+            {
+                if (_roomCache.InvalidateRoom(memberEv.RoomId))
+                    log.Debug("Invalidated cache for {roomId}", memberEv.RoomId);
+            }
+            
             // Skip any events that didn't come from us.
             foreach (var item in events.Where(e => IsMineId(e.Sender)).GroupBy(e => e.RoomId))
             {   
                 //TODO: I guess we need to fetch the destinations for each event in a room, because someone may have got banned in between.
-                var hosts = await GetHostsInRoom(item.Key);
+                var hosts = GetHostsInRoom(item.Key);
 
                 if (hosts.Count == 0)
                 {
@@ -347,8 +384,21 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                         foreach (var sigs in (JObject) sigHosts.Value)
                             pduEv.signatures[sigHosts.Key].Add(sigs.Key, sigs.Value.Value<string>());
                     }
+                    
+                    HashSet<string> hostsToSend = new HashSet<string>(hosts);
 
-                    foreach (var host in hosts)
+                    if (pduEv.type == "m.room.member" && !string.IsNullOrEmpty(pduEv.state_key))
+                    {
+                        var dest = pduEv.state_key.Split(":");
+
+                        if (dest.Length > 1)
+                        {
+                            // If this is a member event, ensure that the destination gets it
+                            hostsToSend.Add(dest[1]);
+                        }
+                    }
+
+                    foreach (var host in hostsToSend)
                     {
                         var transaction = GetOrCreateTransactionForDest(host);
                         transaction.pdus.Add(pduEv);
@@ -372,7 +422,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Still behind?
             if (top < _lastEventPoke)
             {
-                log.Information("Calling ProcessPendingEvents again because we are still behind");
+                log.Information("Calling ProcessPendingEvents again because we are still behind {top} < {_lastEventPoke}", top, _lastEventPoke);
                 await ProcessPendingEvents();
             }
         }
@@ -382,12 +432,29 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Lock here to avoid racing.
             lock (this)
             {
+                var now = DateTime.Now;
+
+                if (_destLastTxnTime.TryGetValue(destination, out var lastTime))
+                {
+                    var diff = now - lastTime;
+
+                    if (diff < minDelayBetweenTxns)
+                    {
+                        var delay = minDelayBetweenTxns - diff;
+                        log.Debug("Delaying task for {delay}ms", delay.TotalMilliseconds);
+                        Task.Delay(delay).ContinueWith(_ => AttemptTransaction(destination));
+                        return;
+                    }
+                }
+
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
                     if (!_destOngoingTrans[destination].IsCompleted) return;
                     _destOngoingTrans.Remove(destination);
                 }
 
+                _destLastTxnTime.Remove(destination);
+                _destLastTxnTime.Add(destination, now);
                 var t = AttemptNewTransaction(destination);
                 _destOngoingTrans.Add(destination, t);
             }
@@ -472,7 +539,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList()
                                          .ConvertAll(m => Tuple.Create(m.StreamId, (string) m.content["user_id"]));
 
-            if (deviceLists.Count == 0 && deviceMsgs.Count == 0)
+            if (!deviceLists.Any() && !deviceMsgs.Any())
             {
                 // Optimise early.
                 return;
@@ -542,62 +609,49 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         /// <summary>
         ///     Get a set of remote hosts interested in this presence.
         /// </summary>
-        private async Task<Dictionary<string[], PresenceState>> GetInterestedRemotes(List<PresenceState> presenceSet)
+        private Dictionary<string[], PresenceState> GetInterestedRemotes(List<PresenceState> presenceSet)
         {
             var dict = new Dictionary<string[], PresenceState>();
 
             using (WorkerMetrics.FunctionTimer("GetInterestedRemotes"))
             {
-                using (var db = new SynapseDbContext(_connString))
+                // Get the list of rooms shared by these users.
+                // We are intentionally skipping presence lists here.
+                foreach (var presence in presenceSet)
                 {
-                    // Get the list of rooms shared by these users.
-                    // We are intentionally skipping presence lists here.
-                    foreach (var presence in presenceSet)
+                    var hosts = new HashSet<string>();
+
+                    foreach (var room in _roomCache.GetJoinedRoomsForUser(presence.user_id))
                     {
-                        var membershipList = await db
-                                                  .RoomMemberships
-                                                  .Where(m =>
-                                                             m.Membership == "join" &&
-                                                             m.UserId == presence.user_id).ToListAsync();
+                        if (room.Hosts.Length > MaxHostsForPresence)
+                        {
+                            // Don't include rooms with losts of hosts, because it slows shit down.
+                            // TODO: This is not very nice, but things like HQ exist. Fundamentally this
+                            // is a bug with presence, and we should really fix presence. This is the middle ground
+                            // between turning it all off, and rampant presence.
+                            continue;
+                        }
     
-                        var hosts = new HashSet<string>();
-    
-                        // XXX: This is NOT the way to do this, but functions well enough
-                        // for a demo.
-                        foreach (var roomId in membershipList.ConvertAll(m => m.RoomId))
-                            await db.RoomMemberships
-                                    .Where(m => m.RoomId == roomId)
-                                    .ForEachAsync(m =>
-                                                      hosts.Add(m.UserId
-                                                                 .Split(":")
-                                                                  [1]));
-    
-                        // Never include ourselves
-                        hosts.Remove(_serverName);
-                        // Don't include dead hosts.
-                        hosts.RemoveWhere(_backoff.HostIsDown);
-                        // Now get the hosts for that room.
-                        dict.Add(hosts.ToArray(), presence);
+                        hosts.UnionWith(room.Hosts);
                     }
+
+                    // Never include ourselves
+                    hosts.Remove(_serverName);
+                    // Don't include dead hosts.
+                    hosts.RemoveWhere(_backoff.HostIsDown);
+                    // Now get the hosts for that room.
+                    dict.Add(hosts.ToArray(), presence);
                 }
 
                 return dict;
             }
         }
 
-        private async Task<HashSet<string>> GetHostsInRoom(string roomId)
+        private HashSet<string> GetHostsInRoom(string roomId)
         {
             using (WorkerMetrics.FunctionTimer("GetHostsInRoom"))
             {
-                var hosts = new HashSet<string>();
-
-                using (var db = new SynapseDbContext(_connString))
-                {
-                    await db.RoomMemberships.Where(m => m.RoomId == roomId)
-                            .ForEachAsync(m =>
-                                              hosts.Add(m.UserId.Split(":")[1]));
-                }
-
+                var hosts = new HashSet<string>(_roomCache.GetRoom(roomId).Hosts);
                 // Never include ourselves
                 hosts.Remove(_serverName);
                 // Don't include dead hosts.
@@ -622,7 +676,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (!_destPendingTransactions.TryAdd(dest, list))
                 {
                     list = _destPendingTransactions[dest];
-                };
+                }
             }
             else
             {

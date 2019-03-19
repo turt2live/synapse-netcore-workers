@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Timers;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Replication;
 using Matrix.SynapseInterop.Replication.DataRows;
@@ -25,6 +26,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private TransactionQueue _transactionQueue;
         private string connectionString;
         private SigningKey key;
+        private Timer saveFedToken;
 
         public FederationSender(IConfiguration config)
         {
@@ -59,6 +61,18 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 _receiptStream = _synapseReplication.BindStream<ReceiptStreamRow>();
                 _receiptStream.DataRow += OnReceiptRow;
             }
+          
+            saveFedToken = new Timer(150)
+            {
+                AutoReset = false,
+                Enabled = false,
+            };
+            
+            // Doing this avoids us making repeated calls to save the federation.
+            saveFedToken.Elapsed += (sender, args) =>
+            {
+                UpdateFederationPos("federation", _stream_position);
+            };
         }
 
         private void OnReceiptRow(object sender, ReceiptStreamRow e)
@@ -78,13 +92,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void UpdateFederationPos(string type, int id)
         {
-            using (var db = new SynapseDbContext(connectionString))
+            lock (this)
             {
-                var res = db.FederationStreamPosition.SingleOrDefault(r => r.Type == type);
-
-                if (res == null) return;
-                res.StreamId = id;
-                db.SaveChanges();
+                using (var db = new SynapseDbContext(connectionString))
+                {
+                    log.Information("Saving {type} position {pos}", type, id);
+                    var res = db.FederationStreamPosition.SingleOrDefault(r => r.Type == type);
+                    if (res == null) return;
+                    res.StreamId = id;
+                    db.SaveChanges();
+                }
             }
         }
 
@@ -130,9 +147,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (_last_ack >= _stream_position) return;
 
-            UpdateFederationPos("federation", _stream_position);
             _synapseReplication.SendFederationAck(_stream_position.ToString());
             _last_ack = token;
+            saveFedToken.Stop();
+            saveFedToken.Start();
         }
     }
 }

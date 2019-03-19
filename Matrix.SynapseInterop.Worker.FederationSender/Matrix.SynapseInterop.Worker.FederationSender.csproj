@@ -14,6 +14,7 @@
     <PackageReference Include="Sodium.Core" Version="1.2.0" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Matrix.SynapseInterop.Common.MatrixUtils\Matrix.SynapseInterop.Common.MatrixUtils.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Database\Matrix.SynapseInterop.Database.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Replication\Matrix.SynapseInterop.Replication.csproj" />

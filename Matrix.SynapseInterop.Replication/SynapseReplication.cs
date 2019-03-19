@@ -93,7 +93,7 @@ namespace Matrix.SynapseInterop.Replication
             Connected?.Invoke(this, null);
         }
 
-        private async void ReconnectLoop()
+        private async Task ReconnectLoop()
         {
             var attempt = 1;
 
@@ -146,7 +146,7 @@ namespace Matrix.SynapseInterop.Replication
             catch (Exception ex)
             {
                 log.Error("Failed to read from replication: {0}", ex);
-                ReconnectLoop();
+                ReconnectLoop().Wait();
             }
         }
 
@@ -214,8 +214,7 @@ namespace Matrix.SynapseInterop.Replication
             }
             catch (Exception ex)
             {
-                ReconnectLoop();
-                throw new Exception("Failed to send command to Synapse", ex);
+                ReconnectLoop().Wait();
             }
         }
 

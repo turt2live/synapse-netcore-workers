@@ -30,8 +30,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             origin = serverName;
 
             this.key = key;
-            hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008);
             client = new FederationHttpClient(config.GetValue<bool>("allowSelfSigned", false));
+            hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008, client);
         }
         
         public async Task SendTransaction(Transaction transaction)
@@ -68,38 +68,45 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             HttpResponseMessage resp = await Send(msg, transaction.Destination);
 
-            if (resp.IsSuccessStatusCode)
+            // Ensure the response is disposed.
+            using (resp)
             {
-                resp.Content.Dispose();
-                return;
-            }
-
-            var error = await resp.Content.ReadAsStringAsync();
-            var err = JObject.Parse(error);
-
-            if (resp.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                try
+                if (resp.IsSuccessStatusCode)
                 {
-                    var errCode = (string) err["errcode"];
-                    var errorString = (string) err["error"];
+                    return;
+                }
+    
+                if (resp.Content.Headers.ContentType.MediaType != "application/json")
+                {
+                    throw new TransactionFailureException(transaction.Destination, resp.StatusCode);
+                }
+                
+                var err = JObject.Parse(await resp.Content.ReadAsStringAsync());
 
-                    if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
+                if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    try
                     {
-                        log.Warning("Got invalid signature");
+                        var errCode = (string) err["errcode"];
+                        var errorString = (string) err["error"];
 
-                        log.Debug("Auth: {auth}\nBody: {body}",
-                                        msg.Headers.Authorization.Parameter,
-                                        body.ToString(Formatting.Indented));
+                        if (errCode == "M_UNAUTHORIZED" && errorString.StartsWith("Invalid signature"))
+                        {
+                            log.Warning("Got invalid signature");
+
+                            log.Debug("Auth: {auth}\nBody: {body}",
+                                      msg.Headers.Authorization.Parameter,
+                                      body.ToString(Formatting.Indented));
+                        }
+                    }
+                    catch
+                    {
+                        // ignored
                     }
                 }
-                catch
-                {
-                    // ignored
-                }
-            }
 
-            throw new TransactionFailureException(transaction.Destination, resp.StatusCode, err);
+                throw new TransactionFailureException(transaction.Destination, resp.StatusCode, err);
+            }
         }
 
         private async Task<JObject> GetVersion(string destination)
@@ -131,16 +138,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             try
             {
                 log.Debug("[TX] {destination} PUT {uri} Host={hostHeader}"
-                                , destination, msg.RequestUri, msg.Headers.Host);
+                          , destination, msg.RequestUri, msg.Headers.Host);
 
                 sw.Start();
-                resp = await client.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
+                resp = await client.SendAsync(msg, CancellationToken.None);
             }
             catch (HttpRequestException ex)
             {
                 //TODO: This is probably a little extreme.
                 log.Warning("Failed to reach {destination} {message}", destination, ex.Message);
-                hostResolver.RemovehostRecord(destination);
+                hostResolver.RemoveHostRecord(destination);
                 throw;
             }
             finally
@@ -148,11 +155,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 sw.Stop();
 
                 log.Debug("[TX] {destination} Response {timeTaken}ms {statusCode} ",
-                                destination, sw.ElapsedMilliseconds, resp?.StatusCode);
+                          destination, sw.ElapsedMilliseconds, resp?.StatusCode);
             }
+
             if (resp != null && resp.StatusCode == HttpStatusCode.NotFound)
             {
-                hostResolver.RemovehostRecord(destination);
+                hostResolver.RemoveHostRecord(destination);
             }
 
             return resp;
