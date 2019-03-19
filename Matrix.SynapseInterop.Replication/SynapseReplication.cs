@@ -25,6 +25,7 @@ namespace Matrix.SynapseInterop.Replication
         private string _lastAddress;
         private int _lastPort;
         private Timer _pingTimer;
+        private bool ReconnectionInProgress = false;
 
         public string ClientName { get; set; }
 
@@ -94,7 +95,15 @@ namespace Matrix.SynapseInterop.Replication
         }
 
         private async Task ReconnectLoop()
+        private async void ReconnectLoop()
         {
+            if (ReconnectionInProgress)
+            {
+                // Do not try to run ReconnectLoop concurrently.
+                return;
+            }
+
+            ReconnectionInProgress = true;
             var attempt = 1;
 
             while (true)
@@ -112,6 +121,8 @@ namespace Matrix.SynapseInterop.Replication
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 }
             }
+
+            ReconnectionInProgress = false;
         }
 
         private async void ReadLoop()
@@ -146,7 +157,7 @@ namespace Matrix.SynapseInterop.Replication
             catch (Exception ex)
             {
                 log.Error("Failed to read from replication: {0}", ex);
-                ReconnectLoop().Wait();
+                ReconnectLoop();
             }
         }
 
@@ -214,7 +225,8 @@ namespace Matrix.SynapseInterop.Replication
             }
             catch (Exception ex)
             {
-                ReconnectLoop().Wait();
+                ReconnectLoop();
+                throw new Exception("Failed to send command to Synapse", ex);
             }
         }
 
