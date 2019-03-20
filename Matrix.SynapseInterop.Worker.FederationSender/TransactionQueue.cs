@@ -147,7 +147,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (_backoff.HostIsDown(destination))
             {
-                log.Warning("NOT sending device messages to {destination}. Destination is DOWN.");
+                log.Warning("NOT sending device messages to {destination}. Destination is DOWN.", destination);
                 return;
             }
 
@@ -156,7 +156,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (messages.Item1.Count == 0 && messages.Item2.Count == 0) return;
 
-            log.Debug("Sending device messages to {destination} ({d2d},{dlu}",
+            log.Debug("Sending device messages to {destination} ({d2d},{dlu})",
                       destination,
                       messages.Item1.Count,
                       messages.Item2.Count);
