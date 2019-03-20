@@ -152,7 +152,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             // Fetch messages for destination
             var messages = GetNewDeviceMessages(destination);
 
-            if (messages.Item1.Count == 0) return;
+            if (messages.Item1.Count == 0 && messages.Item2.Count == 0) return;
 
             var transaction = GetOrCreateTransactionForDest(destination);
 
