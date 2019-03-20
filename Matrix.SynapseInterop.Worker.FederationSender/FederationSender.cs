@@ -134,7 +134,18 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (_last_ack >= _stream_position) return;
 
-            _synapseReplication.SendFederationAck(_stream_position.ToString());
+            try
+            {
+                _synapseReplication.SendFederationAck(_stream_position.ToString());
+            }
+            catch (Exception ex)
+            {
+                // TODO: Is this correct? We update the token in the DB so
+                // a restarted master should be okay, but it might also mean that
+                // we might see duplicate traffic on connection loss.
+                log.Error("Failed to ACK federation, dropping. {ex}", ex);
+            }
+            
             _last_ack = token;
             saveFedToken.Stop();
             saveFedToken.Start();
