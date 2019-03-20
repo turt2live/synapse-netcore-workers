@@ -117,6 +117,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public void SendEdu(EduEvent ev)
         {
             if (ev.destination == _serverName || _backoff.HostIsDown(ev.destination)) return;
+            log.Debug("Sending EDU {edu_type} to {destination}", ev.edu_type, ev.destination);
 
             // Prod device messages if we've not seen this destination before.
             if (!_destLastDeviceMsgStreamId.ContainsKey(ev.destination)) SendDeviceMessages(ev.destination);
@@ -146,6 +147,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (_backoff.HostIsDown(destination))
             {
+                log.Warning("NOT sending device messages to {destination}. Destination is DOWN.");
                 return;
             }
 
@@ -153,6 +155,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var messages = GetNewDeviceMessages(destination);
 
             if (messages.Item1.Count == 0 && messages.Item2.Count == 0) return;
+
+            log.Debug("Sending device messages to {destination} ({d2d},{dlu}",
+                      destination,
+                      messages.Item1.Count,
+                      messages.Item2.Count);
 
             var transaction = GetOrCreateTransactionForDest(destination);
 
