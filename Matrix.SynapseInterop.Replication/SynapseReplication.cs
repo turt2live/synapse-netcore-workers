@@ -25,6 +25,7 @@ namespace Matrix.SynapseInterop.Replication
         private string _lastAddress;
         private int _lastPort;
         private Timer _pingTimer;
+        private bool ReconnectionInProgress = false;
 
         public string ClientName { get; set; }
 
@@ -83,7 +84,17 @@ namespace Matrix.SynapseInterop.Replication
             SendRaw("NAME " + name);
 
             // Start pinging 
-            _pingTimer = new Timer(SendPing, null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(5));
+            _pingTimer = new Timer(context =>
+            {
+                try
+                {
+                    SendPing(context);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Ping failed: {ex}", ex);
+                }
+            }, null, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(5));
 
             // Start the reader
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
@@ -95,6 +106,13 @@ namespace Matrix.SynapseInterop.Replication
 
         private async void ReconnectLoop()
         {
+            if (ReconnectionInProgress)
+            {
+                // Do not try to run ReconnectLoop concurrently.
+                return;
+            }
+
+            ReconnectionInProgress = true;
             var attempt = 1;
 
             while (true)
@@ -112,6 +130,8 @@ namespace Matrix.SynapseInterop.Replication
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 }
             }
+
+            ReconnectionInProgress = false;
         }
 
         private async void ReadLoop()
