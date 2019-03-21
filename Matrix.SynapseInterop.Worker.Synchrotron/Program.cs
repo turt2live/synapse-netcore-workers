@@ -22,9 +22,11 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             var metricConfig = _config.GetSection("Metrics");
 
             if (metricConfig != null && metricConfig.GetValue<bool>("enabled"))
-                WorkerMetrics.StartMetrics("federation_worker",
+                WorkerMetrics.StartMetrics("synchrotron",
                                            metricConfig.GetValue("bindPort", 9150),
                                            metricConfig.GetValue<string>("bindHost"));
+
+            new Synchrotron().Start(_config).Wait();
             
             Console.ReadKey(true);
         }
