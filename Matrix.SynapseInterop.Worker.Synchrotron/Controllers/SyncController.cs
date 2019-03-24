@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -9,12 +9,15 @@ using Matrix.SynapseInterop.Database.SynapseModels;
 using Routable;
 using Routable.Kestrel;
 using Serilog;
+using Routable;
+using Routable.Kestrel;
 
 namespace Matrix.SynapseInterop.Worker.Synchrotron.Controllers
 {
     public class SyncController : KestrelRouting
     {
         private Synchrotron _sync;
+
         public SyncController(
             RoutableOptions<KestrelRoutableContext, KestrelRoutableRequest, KestrelRoutableResponse> options, Synchrotron sync
         ) : base(options)
