@@ -35,6 +35,8 @@ namespace Matrix.SynapseInterop.Database
         public DbQuery<StateGroup> StateGroups { get; set; }
         public DbQuery<StateGroupsState> StateGroupsStates { get; set; }
         public DbQuery<StateGroupEdge> StateGroupEdges { get; set; }
+        public DbQuery<DeviceMaxStreamId> DeviceMaxStreamId { get; set; }
+        public DbQuery<DeviceInboxItem> DeviceInbox { get; set; }
 
         public SynapseDbContext() : this(DefaultConnectionString) { }
 
@@ -104,19 +106,20 @@ namespace Matrix.SynapseInterop.Database
             }
         }
 
-        public bool GetUserForToken(string accessToken, out User user)
+        public bool GetUserForToken(string accessToken, out User user, out AccessToken token)
         {
             user = null;
+            token = null;
 
-            string userId = AccessTokens.Where(at => at.Token == accessToken)
-                                        .Select(at => at.UserId).FirstOrDefault();
+            var aToken = AccessTokens.FirstOrDefault(at => at.Token == accessToken);
 
-            if (userId == null)
+            if (aToken == null)
             {
                 return false;
             }
             
-            user = Users.FirstOrDefault(u => u.Name == userId);
+            token = aToken;
+            user = Users.FirstOrDefault(u => u.Name == aToken.UserId);
             return user != null;
         }
 

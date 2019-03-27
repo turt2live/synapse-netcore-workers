@@ -26,6 +26,8 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
                 WorkerMetrics.ReportCacheHit("CachedMatrixRoomSet.GetRoom");
                 return room;
             }
+            
+            //TODO: Check to see if the room actually exists.
 
             WorkerMetrics.ReportCacheMiss("CachedMatrixRoomSet.GetRoom");
 
@@ -38,7 +40,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
             return room;
         }
 
-        public IEnumerable<CachedMatrixRoom> GetJoinedRoomsForUser(string userId)
+        public IEnumerable<CachedMatrixRoom> GetJoinedRoomsForUser(string userId, bool populateMemberCache = false)
         {
             if (_userMembershipComplete.Contains(userId))
             {
@@ -53,7 +55,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
                 var roomList = db.GetMembershipForUser(userId)
                                  .Where(m =>
                                             m.Membership == "join")
-                                 .Select(room => GetRoom(room.RoomId, false));
+                                 .Select(room => GetRoom(room.RoomId, populateMemberCache));
                 
                 _userMembershipComplete.Add(userId);
                 return roomList.ToList();

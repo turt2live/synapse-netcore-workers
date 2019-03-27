@@ -29,14 +29,23 @@ namespace Matrix.SynapseInterop.Replication
         private static readonly Dictionary<Type, string> DATA_ROW_STREAM_NAMES = new Dictionary<Type, string>
         {
             {typeof(EventStreamRow), ReplicationStreamName.EVENTS},
-            {typeof(FederationStreamRow), ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE}
+            {typeof(FederationStreamRow), ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE},
+            {typeof(TypingStreamRow), ReplicationStreamName.TYPING},
+            {typeof(AccountDataStreamRow), ReplicationStreamName.ACCOUNT_DATA},
+            {typeof(ToDeviceStreamRow), ReplicationStreamName.TO_DEVICE},
+            {typeof(DeviceListsStreamRow), ReplicationStreamName.DEVICE_LISTS},
+            {typeof(PresenceStreamRow), ReplicationStreamName.PRESENCE},
         };
 
         private static readonly Dictionary<string, Func<string, IReplicationDataRow>> DATA_ROW_FACTORIES =
             new Dictionary<string, Func<string, IReplicationDataRow>>
             {
-                {ReplicationStreamName.EVENTS, raw => EventStreamRow.FromRaw(raw)},
-                {ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE, raw => FederationStreamRow.FromRaw(raw)}
+                {ReplicationStreamName.EVENTS, EventStreamRow.FromRaw},
+                {ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE, FederationStreamRow.FromRaw},
+                {ReplicationStreamName.TYPING, TypingStreamRow.FromRaw},
+                {ReplicationStreamName.ACCOUNT_DATA, AccountDataStreamRow.FromRaw},
+                {ReplicationStreamName.TO_DEVICE, ToDeviceStreamRow.FromRaw},
+                {ReplicationStreamName.PRESENCE, PresenceStreamRow.FromRaw},
             };
 
         private readonly SynapseReplication _replicationHost;

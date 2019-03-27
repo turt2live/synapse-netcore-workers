@@ -113,9 +113,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
         }
 
-        private void OnEventPositionUpdate(object sender, string stream_pos)
+        private void OnEventPositionUpdate(object sender, string streamPos)
         {
-            _transactionQueue?.OnEventUpdate(stream_pos);
+            _transactionQueue?.OnEventUpdate(streamPos);
         }
 
         private void Replication_ServerName(object sender, string serverName)

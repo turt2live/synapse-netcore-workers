@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.SynapseModels;
+using Matrix.SynapseInterop.Replication.DataRows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -24,6 +25,12 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         [JsonIgnore]
         public long MaxAccountDataId = 0;
         
+        [JsonIgnore]
+        public long MaxDeviceId = 0;
+        
+        [JsonIgnore]
+        public long TypingCounter = 0;
+        
         [JsonProperty(PropertyName = "next_batch")]
         public string NextBatch;
 
@@ -34,7 +41,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         private EventList<SyncEvent> _presence = new EventList<SyncEvent> {Events = new List<SyncEvent>()};
 
         [JsonProperty(PropertyName = "account_data")]
-        private EventList<SyncAccountData> _accountData = new EventList<SyncAccountData> {Events = new List<SyncAccountData>()};
+        private EventList<SyncSimpleEvent> _accountData = new EventList<SyncSimpleEvent> {Events = new List<SyncSimpleEvent>()};
         
         [JsonProperty(PropertyName = "to_device")]
         private EventList<SyncEvent> _toDevice = new EventList<SyncEvent> {Events = new List<SyncEvent>()};
@@ -56,7 +63,9 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public bool Empty => Join.Count + Invite.Count + Leave.Count == 0;
         }
 
-        class SyncRoom
+        interface ISyncRoom { }
+
+        class SyncRoom : ISyncRoom
         {
             [JsonProperty(PropertyName = "state")]
             public EventList<SyncStateEvent> State;
@@ -65,7 +74,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public SyncTimeline Timeline = new SyncTimeline();
 
             [JsonProperty(PropertyName = "account_data")]
-            public EventList<SyncAccountData> AccountData;
+            public EventList<SyncSimpleEvent> AccountData;
         }
 
         struct EventList<T>
@@ -74,7 +83,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public List<T> Events;
         }
 
-        class SyncAccountData
+        public class SyncSimpleEvent
         {
             [JsonProperty(PropertyName = "type")]
             public string Type;
@@ -83,19 +92,13 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public JObject Content;
         }
         
-        class SyncEvent
+        public class SyncEvent: SyncSimpleEvent
         {
             [JsonProperty(PropertyName = "sender")]
             public string Sender;
-
-            [JsonProperty(PropertyName = "type")]
-            public string Type;
-            
-            [JsonProperty(PropertyName = "content")]
-            public JObject Content;
         }
 
-        class SyncRoomEvent : SyncEvent
+        public class SyncRoomEvent : SyncEvent
         {
             [JsonProperty(PropertyName = "event_id")]
             public string EventId;
@@ -107,7 +110,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public JObject Unsigned { get; set; }
         }
 
-        class SyncStateEvent : SyncRoomEvent
+        public class SyncStateEvent : SyncRoomEvent
         {
             [JsonProperty(PropertyName = "state_key", NullValueHandling = NullValueHandling.Ignore)]
             public string StateKey;
@@ -125,13 +128,13 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         class JoinedRoom : SyncRoom
         {
             [JsonProperty(PropertyName = "ephemeral")]
-            public EventList<SyncEvent> Ephemeral;
+            public EventList<SyncSimpleEvent> Ephemeral = new EventList<SyncSimpleEvent> {Events = new List<SyncSimpleEvent>()};
 
             [JsonProperty(PropertyName = "unread_notifications")]
             public UnreadNotificationsCount UnreadNotifications;
         }
 
-        class InvitedRoom
+        class InvitedRoom : ISyncRoom
         {
             [JsonProperty(PropertyName = "invite_state")]
             public InvitedRoomState InvitedRoomState;
@@ -155,7 +158,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public string PrevBatch;
         }
 
-        class UnreadNotificationsCount
+        struct UnreadNotificationsCount
         {
             [JsonProperty(PropertyName = "highlight_count")]
             public int HighlightCount;
@@ -166,19 +169,17 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
 
         public void Finish()
         {
-            var key = $"s{MaxEventStreamId},{MaxAccountDataId}";
+            var key = $"s{MaxEventStreamId},{MaxAccountDataId},{TypingCounter},{MaxDeviceId}";
             NextBatch = key;
             IsReady = true;
         }
 
         public static int[] ParseSinceToken(string since)
         {
-            return since.Substring("s".Length).Split(",").Select(int.Parse).ToArray();
-        }
-
-        public string ToJson()
-        {
-            return JObject.FromObject(this).ToString();
+            var t = since.Substring("s".Length).Split(",").Select(int.Parse).ToArray();
+            var tokens = new int[4];
+            t.CopyTo(tokens, 0);
+            return tokens;
         }
 
         public void AddAccountData(AccountData data)
@@ -188,11 +189,76 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                 MaxAccountDataId = data.StreamId;
             }
 
-            _accountData.Events.Add(new SyncAccountData
+            _accountData.Events.Add(new SyncSimpleEvent
             {
                 Content = JObject.Parse(data.Content),
                 Type = data.Type,
             });
+        }
+
+        private ISyncRoom GetRoomForMembership(string membership, string roomId)
+        {
+            lock (this)
+            {
+                ISyncRoom room;
+                
+                if (membership == "join")
+                {
+                    if (_rooms.Join.TryGetValue(roomId, out var joinedRoom))
+                    {
+                        return joinedRoom;
+                    }
+                
+                    room = new JoinedRoom
+                    {
+                        State = new EventList<SyncStateEvent>
+                        {
+                            Events = new List<SyncStateEvent>()
+                        }
+                    };
+
+                    _rooms.Join.Add(roomId, (JoinedRoom) room);
+                }
+                else if (membership == "leave")
+                {
+                    if (_rooms.Leave.TryGetValue(roomId, out var leftRoom))
+                    {
+                        return leftRoom;
+                    }
+                
+                    room = new SyncRoom
+                    {
+                        State = new EventList<SyncStateEvent>
+                        {
+                            Events = new List<SyncStateEvent>()
+                        }
+                    };
+
+                    _rooms.Leave.Add(roomId, (SyncRoom) room);
+                    return room;
+                }
+                else if (membership == "invite")
+                {
+                    if (_rooms.Invite.TryGetValue(roomId, out var inviteRoom))
+                    {
+                        return inviteRoom;
+                    }
+
+                    room = new InvitedRoom
+                    {
+                        InvitedRoomState = new InvitedRoomState(),
+                    };
+
+                    _rooms.Invite.Add(roomId, (InvitedRoom) room);
+                    return room;
+                }
+                else
+                {
+                    throw new Exception("Unknown membership");
+                }
+                
+                return room;
+            }
         }
         
         public async Task BuildRoomResponse(string roomId, string membership,
@@ -205,43 +271,12 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                 // Treat bans and leaves the same.
                 membership = "leave";
             }
+            
+            var room = GetRoomForMembership(membership, roomId);
 
             if (membership == "join" || membership == "leave")
             {
-                SyncRoom room = null;
-                
-                if (membership == "join" && _rooms.Join.TryGetValue(roomId, out var joinedRoom))
-                {
-                    room = joinedRoom;
-                }
-                else if (membership == "join")
-                {
-                    room = new JoinedRoom
-                    {
-                        State = new EventList<SyncStateEvent>
-                        {
-                            Events = new List<SyncStateEvent>()
-                        }
-                    };
-
-                    _rooms.Join.Add(roomId, (JoinedRoom) room);
-                }
-                else if (membership == "leave" && !_rooms.Leave.TryGetValue(roomId, out room))
-                {
-                    room = new SyncRoom
-                    {
-                        State = new EventList<SyncStateEvent>
-                        {
-                            Events = new List<SyncStateEvent>()
-                        }
-                    };
-
-                    _rooms.Leave.Add(roomId, room);
-                }
-                else if (room == null)
-                {
-                    throw new Exception("Unknown membership");
-                }
+                SyncRoom syncRoom = (SyncRoom) room;
                 
                 foreach (var ev in roomGetCurrentState)
                 {
@@ -260,7 +295,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                         Type = ev.Type
                     };
 
-                    room.State.Events.Add(syncEv);
+                    syncRoom.State.Events.Add(syncEv);
                 }
 
                 foreach (var ev in getLatestEvents)
@@ -284,12 +319,17 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                     }
                     
                     // TODO: prev_content - How do we get this?
-                    room.Timeline.Events.Add(syncEv);
+                    syncRoom.Timeline.Events.Add(syncEv);
 
                     if (ev.StreamOrdering > MaxEventStreamId)
                     {
                         MaxEventStreamId = ev.StreamOrdering;
                     }
+                }
+
+                if (roomAccountData == null)
+                {
+                    return;
                 }
 
                 var accountData = roomAccountData.OrderByDescending(rad => rad.StreamId).FirstOrDefault();
@@ -299,49 +339,78 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                     MaxAccountDataId = accountData.StreamId;
                 }
 
-                room.AccountData.Events = roomAccountData
-                                         .Select(e =>
-                                                     new SyncAccountData
-                                                     {
-                                                         Content = JObject.Parse(e.Content),
-                                                         Type = e.Type,
-                                                     }).ToList();
+                syncRoom.AccountData.Events = roomAccountData
+                                             .Select(e =>
+                                                         new SyncSimpleEvent
+                                                         {
+                                                             Content = JObject.Parse(e.Content),
+                                                             Type = e.Type,
+                                                         }).ToList();
             }
             else if (membership == "invite")
             {
-                if (!_rooms.Invite.TryGetValue(roomId, out var room))
+                //TODO: Support invites
+                var inviteRoom = (InvitedRoom) room;
+                
+                foreach (var ev in roomGetCurrentState)
                 {
-                    room = new InvitedRoom();
+                    var content = await ev.GetContent();
+                    FormatUnsigned(content["unsigned"] as JObject);
 
-                    if (!_rooms.Invite.TryAdd(roomId, room))
+                    StrippedState syncEv = new StrippedState
                     {
-                        room = _rooms.Invite[roomId];
+                        StateKey = content["state_key"].Value<string>() ?? "",
+                        Content = content["content"] as JObject,
+                        Sender = ev.Sender,
+                        Type = ev.Type,
+                    };
+                    
+                    if (ev.StreamOrdering > MaxEventStreamId)
+                    {
+                        MaxEventStreamId = ev.StreamOrdering;
                     }
+
+                    inviteRoom.InvitedRoomState.Events.Add(syncEv);
                 }
             }
         }
 
         public void SetNotifCount(string roomId, EventPushSummary summary)
         {
-            if (!_rooms.Join.TryGetValue(roomId, out var joinedRoom))
-            {
-                joinedRoom = new JoinedRoom
-                {
-                    State = new EventList<SyncStateEvent>
-                    {
-                        Events = new List<SyncStateEvent>()
-                    }
-                };
-                
-                Console.WriteLine(roomId, joinedRoom.GetHashCode());
-                _rooms.Join.Add(roomId, joinedRoom);
-            }
+            JoinedRoom room = (JoinedRoom) GetRoomForMembership("join", roomId);
 
-            joinedRoom.UnreadNotifications = new UnreadNotificationsCount
+            room.UnreadNotifications = new UnreadNotificationsCount
             {
                 NotificationCount = summary?.NotifCount ?? 0,
                 HighlightCount = 0 // TODO: Support highlight_count
             };
+        }
+
+        public void AddTyping(string roomId, IEnumerable<string> userIds)
+        {
+            JoinedRoom room = (JoinedRoom) GetRoomForMembership("join", roomId) as JoinedRoom;
+
+            room.Ephemeral.Events.Add(new SyncSimpleEvent
+            {
+                Type = "m.typing",
+                Content = JObject.FromObject(new { user_ids = userIds}),
+            });
+        }
+
+        public void AddPresence(PresenceStreamRow presenceRow)
+        {
+            var lastActiveAgo = DateTime.Now - DateTimeOffset.FromUnixTimeMilliseconds(presenceRow.LastActiveTs);
+            _presence.Events.Add(new SyncEvent
+            {
+                Sender = presenceRow.UserId,
+                Content = JObject.FromObject(new
+                {
+                    last_active_ago = (long)lastActiveAgo.TotalMilliseconds,
+                    status_msg = presenceRow.StatusMsg,
+                    presence = presenceRow.State
+                }),
+                Type = "m.presence"
+            });
         }
 
         private static void FormatUnsigned(JObject unsignedData)
