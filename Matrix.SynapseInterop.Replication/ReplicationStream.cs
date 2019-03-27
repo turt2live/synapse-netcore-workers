@@ -35,6 +35,7 @@ namespace Matrix.SynapseInterop.Replication
             {typeof(ToDeviceStreamRow), ReplicationStreamName.TO_DEVICE},
             {typeof(DeviceListsStreamRow), ReplicationStreamName.DEVICE_LISTS},
             {typeof(PresenceStreamRow), ReplicationStreamName.PRESENCE},
+            {typeof(ReceiptStreamRow), ReplicationStreamName.RECEIPTS},
         };
 
         private static readonly Dictionary<string, Func<string, IReplicationDataRow>> DATA_ROW_FACTORIES =
@@ -46,6 +47,9 @@ namespace Matrix.SynapseInterop.Replication
                 {ReplicationStreamName.ACCOUNT_DATA, AccountDataStreamRow.FromRaw},
                 {ReplicationStreamName.TO_DEVICE, ToDeviceStreamRow.FromRaw},
                 {ReplicationStreamName.PRESENCE, PresenceStreamRow.FromRaw},
+                {ReplicationStreamName.EVENTS, raw => EventStreamRow.FromRaw(raw)},
+                {ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE, raw => FederationStreamRow.FromRaw(raw)},
+                {ReplicationStreamName.RECEIPTS, raw => ReceiptStreamRow.FromRaw(raw)},
             };
 
         private readonly SynapseReplication _replicationHost;
