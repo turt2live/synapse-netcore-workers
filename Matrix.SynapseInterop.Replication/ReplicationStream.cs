@@ -46,10 +46,9 @@ namespace Matrix.SynapseInterop.Replication
                 {ReplicationStreamName.TYPING, TypingStreamRow.FromRaw},
                 {ReplicationStreamName.ACCOUNT_DATA, AccountDataStreamRow.FromRaw},
                 {ReplicationStreamName.TO_DEVICE, ToDeviceStreamRow.FromRaw},
+                {ReplicationStreamName.DEVICE_LISTS, DeviceListsStreamRow.FromRaw},
                 {ReplicationStreamName.PRESENCE, PresenceStreamRow.FromRaw},
-                {ReplicationStreamName.EVENTS, raw => EventStreamRow.FromRaw(raw)},
-                {ReplicationStreamName.FEDERATION_OUTBOUND_QUEUE, raw => FederationStreamRow.FromRaw(raw)},
-                {ReplicationStreamName.RECEIPTS, raw => ReceiptStreamRow.FromRaw(raw)},
+                {ReplicationStreamName.RECEIPTS, ReceiptStreamRow.FromRaw},
             };
 
         private readonly SynapseReplication _replicationHost;

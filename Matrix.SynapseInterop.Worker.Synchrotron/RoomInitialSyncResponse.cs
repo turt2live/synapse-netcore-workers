@@ -26,14 +26,14 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
 
         public class PaginationChunk
         {
-            [JsonProperty("start")]
+            [JsonProperty("start", NullValueHandling = NullValueHandling.Ignore)]
             public string Start;
 
-            [JsonProperty("end")]
+            [JsonProperty("end", NullValueHandling = NullValueHandling.Ignore)]
             public string End;
 
             [JsonProperty("chunk")]
-            public List<SyncResponse.SyncRoomEvent> AccountData;
+            public List<SyncResponse.SyncRoomEvent> Chunk;
         }
     }
 }

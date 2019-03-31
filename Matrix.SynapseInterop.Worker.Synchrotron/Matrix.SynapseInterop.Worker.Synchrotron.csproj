@@ -22,8 +22,11 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Cors" Version="2.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Server.Kestrel" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.2.0" />
+    <PackageReference Include="Routable.Json" Version="1.1.5" />
+    <PackageReference Include="Routable.Kestrel" Version="1.1.5" />
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json">

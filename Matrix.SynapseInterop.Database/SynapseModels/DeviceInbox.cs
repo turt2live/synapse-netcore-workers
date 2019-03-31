@@ -14,7 +14,7 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
         [Column("device_id")]
         public string DeviceId { get; set; }
         
-        [Column("messages_json")]
-        public string MessagesJson { get; set; }
+        [Column("message_json")]
+        public string MessageJson { get; set; }
     }
 }

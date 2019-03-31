@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Database;
@@ -17,7 +18,8 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         public bool IsReady = false;
         
         [JsonIgnore]
-        public bool Empty => _rooms.Empty;
+        public bool Empty => _rooms.Empty && _presence.Events.Count + _accountData.Events.Count + 
+                             _toDevice.Events.Count + _deviceLists.Changed.Count + _deviceLists.Left.Count == 0;
         
         [JsonIgnore]
         public long MaxEventStreamId = 0;
@@ -26,7 +28,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         public long MaxAccountDataId = 0;
         
         [JsonIgnore]
-        public long MaxDeviceId = 0;
+        public long DeviceListId = 0;
         
         [JsonIgnore]
         public long TypingCounter = 0;
@@ -45,6 +47,13 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         
         [JsonProperty(PropertyName = "to_device")]
         private EventList<SyncEvent> _toDevice = new EventList<SyncEvent> {Events = new List<SyncEvent>()};
+
+        [JsonProperty(PropertyName = "device_lists")]
+        private DeviceListChanges _deviceLists =
+            new DeviceListChanges {Changed = new HashSet<string>(), Left = new HashSet<string>()};
+
+        [JsonProperty(PropertyName = "device_one_time_keys_count")]
+        private DeviceOneTimeKeysCount _oneTimeKeysCount = new DeviceOneTimeKeysCount();
         
         //TODO: Support device_lists, device_one_time_keys_count
 
@@ -96,6 +105,10 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         {
             [JsonProperty(PropertyName = "sender")]
             public string Sender;
+
+            // For legacy things.
+            [JsonProperty(PropertyName = "user_id")]
+            public string UserId => Sender;
         }
 
         public class SyncRoomEvent : SyncEvent
@@ -152,7 +165,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public List<SyncStateEvent> Events = new List<SyncStateEvent>();
             
             [JsonProperty(PropertyName = "limited")]
-            public Boolean Limited;
+            public bool Limited;
             
             [JsonProperty(PropertyName = "prev_batch")]
             public string PrevBatch;
@@ -167,9 +180,27 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             public int NotificationCount;
         }
 
+        struct DeviceOneTimeKeysCount
+        {
+            [JsonProperty(PropertyName = "curve25519")]
+            public int Curve25519;
+            
+            [JsonProperty(PropertyName = "signed_curve25519")]
+            public int SignedCurve25519;
+        }
+
+        struct DeviceListChanges
+        {
+            [JsonProperty(PropertyName = "changed")]
+            public HashSet<string> Changed;
+            
+            [JsonProperty(PropertyName = "left")]
+            public HashSet<string> Left;
+        }
+
         public void Finish()
         {
-            var key = $"s{MaxEventStreamId},{MaxAccountDataId},{TypingCounter},{MaxDeviceId}";
+            var key = $"s{MaxEventStreamId},{MaxAccountDataId},{TypingCounter},{DeviceListId}";
             NextBatch = key;
             IsReady = true;
         }
@@ -264,7 +295,8 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
         public async Task BuildRoomResponse(string roomId, string membership,
                                             IEnumerable<EventJsonSet> getLatestEvents,
                                             IEnumerable<EventJsonSet> roomGetCurrentState,
-                                            List<RoomAccountData> roomAccountData)
+                                            List<RoomAccountData> roomAccountData,
+                                            string prevBatch = null)
         {
             if (membership == "ban")
             {
@@ -298,7 +330,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                     syncRoom.State.Events.Add(syncEv);
                 }
 
-                foreach (var ev in getLatestEvents)
+                foreach (var ev in getLatestEvents.OrderBy(e => e.StreamOrdering))
                 {
                     var content = await ev.GetContent();
                     FormatUnsigned(content["unsigned"] as JObject);
@@ -325,6 +357,8 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                     {
                         MaxEventStreamId = ev.StreamOrdering;
                     }
+
+                    syncRoom.Timeline.PrevBatch = prevBatch;
                 }
 
                 if (roomAccountData == null)
@@ -388,7 +422,7 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
 
         public void AddTyping(string roomId, IEnumerable<string> userIds)
         {
-            JoinedRoom room = (JoinedRoom) GetRoomForMembership("join", roomId) as JoinedRoom;
+            JoinedRoom room = (JoinedRoom) GetRoomForMembership("join", roomId);
 
             room.Ephemeral.Events.Add(new SyncSimpleEvent
             {
@@ -413,6 +447,38 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
             });
         }
 
+        public void AddReceipt(ReceiptStreamRow receipt)
+        {
+            JoinedRoom room = (JoinedRoom) GetRoomForMembership("join", receipt.RoomId);
+            var r = room.Ephemeral.Events.FirstOrDefault(e => e.Type == "m.receipt");
+
+            if (r == null)
+            {
+                r = new SyncSimpleEvent()
+                {
+                    Type = "m.receipt",
+                    Content = new JObject()
+                };
+
+                room.Ephemeral.Events.Add(r);
+            }
+
+            JObject userSet;
+
+            if (!r.Content.ContainsKey(receipt.EventId))
+            {
+                r.Content[receipt.EventId] = new JObject();
+                r.Content[receipt.EventId]["m.read"] = userSet = new JObject();
+            }
+            else
+            {
+                userSet = r.Content[receipt.EventId]["m.read"] as JObject;
+            }
+            
+            if (userSet != null)            
+                userSet[receipt.UserId] = receipt.Data;
+        }
+
         private static void FormatUnsigned(JObject unsignedData)
         {
             if (unsignedData.TryGetValue("age_ts", out var age))
@@ -420,6 +486,32 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                 unsignedData.Remove("age_ts");
                 unsignedData["age"] = age;
             }
+        }
+
+        public void AddDeviceMsg(DeviceInboxItem msg)
+        {
+            var content = JObject.Parse(msg.MessageJson);
+            var type = content["type"].Value<string>();
+            var sender = content["sender"].Value<string>();
+
+            _toDevice.Events.Add(new SyncEvent
+            {
+                Sender = sender,
+                Content = content["content"] as JObject,
+                Type = type,
+            });
+        }
+
+        public void SetOneTimeKeysCount(int curve25519, int signedCurve25519)
+        {
+            _oneTimeKeysCount.Curve25519 = curve25519;
+            _oneTimeKeysCount.SignedCurve25519 = signedCurve25519;
+        }
+
+        public void SetDeviceListChanges(HashSet<string> changed, HashSet<string> left)
+        {
+            _deviceLists.Changed = changed;
+            _deviceLists.Left = left;
         }
     }
 }

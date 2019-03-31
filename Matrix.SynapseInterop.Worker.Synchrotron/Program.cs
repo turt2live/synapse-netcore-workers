@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
 using Matrix.SynapseInterop.Common;
+using Matrix.SynapseInterop.Common.MatrixUtils;
+using Matrix.SynapseInterop.Common.WebResponses;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Worker.Synchrotron.Controllers;
 using Microsoft.AspNetCore.Builder;
@@ -19,7 +21,9 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
     {
         private static IConfiguration _config;
         private static readonly ILogger _log = Log.ForContext<Program>();
+        private static CachedMatrixRoomSet _roomSet;
         private static Synchrotron _sync;
+        private static MessagesHandler _messages;
 
         private static void Main(string[] args)
         {
@@ -40,7 +44,9 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                                            metricConfig.GetValue("bindPort", 9150),
                                            metricConfig.GetValue<string>("bindHost"));
 
-            _sync = new Synchrotron();
+            _roomSet = new CachedMatrixRoomSet();
+            _messages = new MessagesHandler(_roomSet);
+            _sync = new Synchrotron(_messages, _roomSet);
             _sync.Start(_config);
             RunKestrel();
             Console.ReadKey(true);
@@ -55,32 +61,31 @@ namespace Matrix.SynapseInterop.Worker.Synchrotron
                       .UseSerilog()
                       .UseKestrel(options => options.Listen(IPAddress.Parse(kestrelConfig.GetValue<string>("bindHost")),
                                                             kestrelConfig.GetValue<int>("bindPort")))
-                      .ConfigureServices(s => { s.AddCors(); })
-                      .Configure(app =>
+                      .ConfigureServices(s =>
                        {
-                           app.UseCors(builder => builder
-                                                 .AllowAnyOrigin()
-                                                 .AllowAnyMethod()
-                                                 .AllowAnyHeader());
+                           s.AddCors(options =>
+                           {
+                               options.AddPolicy("CorsPolicyAllowAll",
+                                                 builder => builder.AllowAnyOrigin()
+                                                                   .AllowAnyMethod()
+                                                                   .AllowAnyHeader());
+                           });
                        })
-                      .Configure(builder => builder.UseRoutable(options =>
+                      .Configure(builder => builder.UseCors("CorsPolicyAllowAll").UseRoutable(options =>
                        {
                            options
                               .WithJsonSupport()
                               .UseLogger(new RoutableSerilogLogger(_log))
                               .AddRouting(new SyncController(options, _sync))
+                              .AddRouting(new RoomController(options, _messages))
                               .OnError(new KestrelRouting(options)
                                {
                                    _ => _.Do((context, request, response) =>
                                    {
-                                       response.Status = 500;
+                                       var err = context.Error is ErrorException e ? e.Response : ErrorResponse.DefaultResponse;
+                                       response.Status = err.HttpStatus;
                                        response.ContentType = "application/json";
-
-                                       response.Write(JObject.FromObject(new
-                                       {
-                                           error = "Internal server error",
-                                           errcode = "M_UNKNOWN"
-                                       }));
+                                       response.Write(JObject.FromObject(err));
                                    })
                                });
                        }))

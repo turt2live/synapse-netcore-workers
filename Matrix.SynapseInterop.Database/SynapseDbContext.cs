@@ -37,6 +37,9 @@ namespace Matrix.SynapseInterop.Database
         public DbQuery<StateGroupEdge> StateGroupEdges { get; set; }
         public DbQuery<DeviceMaxStreamId> DeviceMaxStreamId { get; set; }
         public DbQuery<DeviceInboxItem> DeviceInbox { get; set; }
+        public DbQuery<E2EOneTimeKey> E2EOneTimeKeys { get; set; }
+        public DbQuery<DeviceListsStream> DeviceListsStream { get; set; }
+        public DbQuery<UsersWhoShareRooms> UsersWhoShareRooms { get; set; }
 
         public SynapseDbContext() : this(DefaultConnectionString) { }
 
