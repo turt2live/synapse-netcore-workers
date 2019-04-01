@@ -153,11 +153,11 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
             {
                 var ev = GetEvent(eventId);
 
-                var evs = db.Events.Where((e) => (forward ? e.StreamOrdering >= ev.StreamOrdering : e.StreamOrdering <= ev.StreamOrdering) && e.RoomId == ev.RoomId);
+                var evs = db.Events.Where(e => (forward ? e.StreamOrdering >= ev.StreamOrdering : e.StreamOrdering <= ev.StreamOrdering) && e.RoomId == ev.RoomId);
 
-                evs = forward ? evs.OrderBy((e) => e.StreamOrdering) : evs.OrderByDescending((e) => e.StreamOrdering);
+                evs = forward ? evs.OrderBy(e => e.StreamOrdering) : evs.OrderByDescending(e => e.StreamOrdering);
                 
-                return evs.Take(limit).Select((e) => GetEvent(e.EventId)).ToList();
+                return evs.Take(limit).Select(e => GetEvent(e.EventId)).ToList();
             }
         }
 
@@ -212,10 +212,14 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
             if (visibility == "world_readable")
             {
                 return true;
-            } else if (currentMembership == "join" && visibility == "shared")
+            }
+
+            if (currentMembership == "join" && visibility == "shared")
             {
                 return true;
-            } else if (membershipAtEvent == "invite" && visibility == "invite")
+            }
+
+            if (membershipAtEvent == "invite" && visibility == "invite")
             {
                 return true;
             }
@@ -254,7 +258,8 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
 
         public IEnumerable<EventJsonSet> GetStateAtEvent(string eventId)
         {
-            return _stateGroupCache.GetStateForEvent(eventId).Select((e) => GetEvent(e.EventId));
+            var state = _stateGroupCache.GetStateForEvent(eventId).Select(e => GetEvent(e.EventId));
+            return state;
         }
 
         public void PopulateMemberCache()

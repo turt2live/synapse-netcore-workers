@@ -1,13 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
 using Matrix.SynapseInterop.Database.SynapseModels;
+using Serilog;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Matrix.SynapseInterop.Database
 {
     public class StateGroupCache
     {
+        private Serilog.ILogger _log = Log.ForContext<StateGroupCache>();
         public List<StateGroupsState> GetStateForEvent(EventJsonSet ev) => GetStateForEvent(ev.EventId);
         public List<StateGroupsState> GetStateForEvent(Event ev) => GetStateForEvent(ev.EventId);
 
@@ -29,8 +33,16 @@ namespace Matrix.SynapseInterop.Database
             
             using (var db = new SynapseDbContext())
             {
-                stateGroup = db.EventToStateGroups.First(eventStateGroup => eventStateGroup.EventId == eventId).StateGroup;
-
+                try
+                {
+                    stateGroup = db.EventToStateGroups.First(eventStateGroup => eventStateGroup.EventId == eventId).StateGroup;
+                }
+                catch (Exception ex)
+                {
+                    _log.Warning("Could not find state group for {eventId}: {ex}", eventId, ex);
+                    return new List<StateGroupsState>(0);
+                }
+                
                 if (_stateGroupStateCache.TryGetValue(stateGroup, out var state))
                 {
                     WorkerMetrics.ReportCacheHit("StateGroupCache.GetStateForGroup");
