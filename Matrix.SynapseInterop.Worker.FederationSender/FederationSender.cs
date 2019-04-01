@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Timers;
@@ -54,7 +54,14 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _eventStream = _synapseReplication.BindStream<EventStreamRow>();
             _eventStream.PositionUpdate += OnEventPositionUpdate;
             _stream_position = await GetFederationPos("federation");
-
+            
+            // Newer versions of synapse expect us to create reciepts too.
+            if (_config.GetSection("federation").GetValue<bool>("handleReceipts"))
+            {
+                _receiptStream = _synapseReplication.BindStream<ReceiptStreamRow>();
+                _receiptStream.DataRow += OnReceiptRow;
+            }
+          
             saveFedToken = new Timer(150)
             {
                 AutoReset = false,
@@ -73,6 +80,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 _receiptStream = _synapseReplication.BindStream<ReceiptStreamRow>();
                 _receiptStream.DataRow += OnReceiptRow;
             }
+        }
+
+        private void OnReceiptRow(object sender, ReceiptStreamRow e)
+        {
+            _transactionQueue?.OnReciept(e);
         }
 
         private void OnReceiptRow(object sender, ReceiptStreamRow e)
