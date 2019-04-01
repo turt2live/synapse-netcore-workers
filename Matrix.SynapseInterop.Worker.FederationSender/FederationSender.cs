@@ -55,7 +55,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _eventStream.PositionUpdate += OnEventPositionUpdate;
             _stream_position = await GetFederationPos("federation");
             
-            // Newer versions of synapse expect us to create reciepts too.
+            // Newer versions of synapse expect us to create receipts too.
             if (_config.GetSection("federation").GetValue<bool>("handleReceipts"))
             {
                 _receiptStream = _synapseReplication.BindStream<ReceiptStreamRow>();

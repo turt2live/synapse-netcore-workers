@@ -23,7 +23,7 @@ namespace Matrix.SynapseInterop.Replication.DataRows
                 RecieptType = parsed[1],
                 UserId = parsed[2],
                 EventId = parsed[3],
-                Data = JObject.Parse(parsed[4]),
+                Data = parsed[4] as JObject,
             };
         }
     }
