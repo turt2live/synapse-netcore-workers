@@ -213,7 +213,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             using (WorkerMetrics.FunctionTimer("OnReciept"))
             {
-                (await GetHostsInRoom(row.RoomId)).ForEach(host =>
+                (GetHostsInRoom(row.RoomId)).ForEach(host =>
                 {
                     var ev = new EduEvent
                     {
