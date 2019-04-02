@@ -48,24 +48,33 @@ namespace Matrix.SynapseInterop.Database
                                           .Take(limit)
                                           .OrderBy(poke => poke.StreamId).ToList())
                 {
+                    var device = Devices.SingleOrDefault(dev =>
+                                                             dev.UserId == devicePoke.UserId &&
+                                                             dev.DeviceId == devicePoke.DeviceId);
+
+                    var previousIds = DeviceListsOutboundPokes.Where(dev => 
+                                                                         dev.UserId == devicePoke.UserId &&
+                                                                         dev.DeviceId == devicePoke.DeviceId &&
+                                                                         dev.StreamId < devicePoke.StreamId).Select(poke => poke.StreamId).ToArray();
+                    
                     var contentSet = new DeviceContentSet
                     {
                         device_id = devicePoke.DeviceId,
                         stream_id = devicePoke.StreamId,
                         user_id = devicePoke.UserId,
-                        deleted = false
+                        deleted = device == null,
+                        prev_id = previousIds,
                     };
 
                     var json = E2EDeviceKeysJson
                        .SingleOrDefault(devKeys => devKeys.DeviceId == devicePoke.DeviceId &&
                                                    devKeys.UserId == devicePoke.UserId);
 
-                    if (json != null) contentSet.keys = JObject.Parse(json.KeyJson);
+                    if (json != null)
+                        contentSet.keys = JObject.Parse(json.KeyJson);
 
-                    contentSet.device_display_name = Devices.SingleOrDefault(dev =>
-                                                                                 dev.UserId == devicePoke.UserId &&
-                                                                                 dev.DeviceId == devicePoke.DeviceId)
-                                                           ?.DisplayName;
+                    if (device != null)
+                        contentSet.device_display_name = device.DisplayName;
 
                     set.Add(contentSet);
                 }
