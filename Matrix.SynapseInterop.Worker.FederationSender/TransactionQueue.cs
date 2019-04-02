@@ -543,8 +543,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             var deviceMsgs = transaction.edus.Where(m => m.edu_type == "m.direct_to_device").ToList()
                                         .ConvertAll(m => m.StreamId);
 
-            var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList()
-                                         .ConvertAll(m => Tuple.Create(m.StreamId, (string) m.content["user_id"]));
+            var deviceLists = transaction.edus.Where(m => m.edu_type == "m.device_list_update").ToList();
 
             if (!deviceLists.Any() && !deviceMsgs.Any())
             {
@@ -557,7 +556,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (deviceMsgs.Count != 0)
                 {
                     _destLastDeviceMsgStreamId[transaction.Destination] = deviceMsgs.Max();
-                    var deviceMsgEntries = db.DeviceFederationOutboxes.Where(m => deviceMsgs.Contains(m.StreamId));
+
+                    var deviceMsgEntries =
+                        db.DeviceFederationOutboxes.Where(m => m.Destination == transaction.Destination &&
+                                                               deviceMsgs.Contains(m.StreamId));
 
                     if (deviceMsgEntries.Any())
                     {
@@ -572,17 +574,25 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 if (deviceLists.Count == 0) return;
 
-                _destLastDeviceListStreamId[transaction.Destination] = deviceLists.Max(e => e.Item1);
+                _destLastDeviceListStreamId[transaction.Destination] = deviceLists.Max(e => e.StreamId);
 
                 var deviceListEntries = db.DeviceListsOutboundPokes
                                           .Where(m =>
                                                      m.Destination == transaction.Destination && 
-                                                     deviceLists.FindIndex(e => e.Item1 == m.StreamId &&
-                                                                                e.Item2 == m.UserId) >= 0);
+                                                     deviceLists.FindIndex(e => e.StreamId == m.StreamId &&
+                                                                                (string)e.content["user_id"] == m.UserId) >= 0);
 
                 if (deviceListEntries.Any())
                 {
-                    foreach (var msg in deviceListEntries) msg.Sent = true;
+                    foreach (var msg in deviceListEntries)
+                    {
+                        log.Debug("Marking device {user_id} {device_id} {destination}",
+                msg.UserId,
+                msg.DeviceId,
+                msg.Destination);
+
+                        msg.Sent = true;
+                    }
 
                     db.SaveChanges();
                 }
