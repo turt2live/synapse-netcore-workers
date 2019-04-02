@@ -576,6 +576,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                 var deviceListEntries = db.DeviceListsOutboundPokes
                                           .Where(m =>
+                                                     m.Destination == transaction.Destination && 
                                                      deviceLists.FindIndex(e => e.Item1 == m.StreamId &&
                                                                                 e.Item2 == m.UserId) >= 0);
 
