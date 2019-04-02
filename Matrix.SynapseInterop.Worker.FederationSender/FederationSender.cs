@@ -77,7 +77,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void OnReceiptRow(object sender, ReceiptStreamRow e)
         {
-            _transactionQueue?.OnReciept(e);
+            _transactionQueue?.OnReceipt(e);
         }
 
         private async Task<int> GetFederationPos(string type)
@@ -116,6 +116,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 foreach (var keyVal in e.keyedEdus)
                     _transactionQueue.SendEdu(keyVal.Value,
                                               keyVal.Key.Join(":"));
+                
+                if (e.devices.Count > 0)
+                    log.Debug("Prodded device updates for {dests}", e.devices.Join(", "));
 
                 e.devices.ForEach(_transactionQueue.SendDeviceMessages);
                 UpdateToken(int.Parse(_fedStream.CurrentPosition));

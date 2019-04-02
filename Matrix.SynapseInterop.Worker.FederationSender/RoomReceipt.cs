@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public struct RoomReceipt
     {
         [JsonProperty("m.read")]
-        public UserReadReceipt MRead;
+        public Dictionary<string, UserReadReceipt> MRead;
     }
 
     public struct UserReadReceipt
@@ -15,6 +16,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
     public struct RoomReceiptMetadata
     {
-        public int ts;
+        public long ts;
     }
 }

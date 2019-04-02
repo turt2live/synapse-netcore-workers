@@ -157,7 +157,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
             if (messages.Item1.Count == 0 && messages.Item2.Count == 0) return;
 
-            log.Debug("Sending device messages to {destination} ({d2d},{dlu})",
+            log.Debug("Sending device messages to {destination} msg:{d2d}, list:{dlu}",
                       destination,
                       messages.Item1.Count,
                       messages.Item2.Count);
@@ -203,7 +203,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             AttemptTransaction(destination);
         }
 
-        public async Task OnReciept(ReceiptStreamRow row)
+        public void OnReceipt(ReceiptStreamRow row)
         {
             if (!IsMineId(row.UserId))
             {
@@ -211,22 +211,31 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 return;
             }
 
-            using (WorkerMetrics.FunctionTimer("OnReciept"))
+            var content = new JObject
             {
-                (GetHostsInRoom(row.RoomId)).ForEach(host =>
+                [row.RoomId] = JObject.FromObject(new RoomReceipt
+                {
+                    MRead = new Dictionary<string, UserReadReceipt>()
+                    {
+                        {
+                            row.UserId, new UserReadReceipt(){
+                                event_ids = new[] {row.EventId},
+                                data = row.Data.ToObject<RoomReceiptMetadata>(),
+                            }
+                        }
+                    }
+                })
+            };
+
+            using (WorkerMetrics.FunctionTimer("OnReceipt"))
+            {
+                GetHostsInRoom(row.RoomId).ForEach(host =>
                 {
                     var ev = new EduEvent
                     {
                         destination = host,
                         edu_type = "m.receipt",
-                        content = JObject.FromObject(new RoomReceipt
-                        {
-                            MRead = new UserReadReceipt
-                            {
-                                event_ids = new [] {row.EventId},
-                                data = row.Data.ToObject<RoomReceiptMetadata>(),
-                            }
-                        }),
+                        content = content,   
                     };
 
                     SendEdu(ev);
