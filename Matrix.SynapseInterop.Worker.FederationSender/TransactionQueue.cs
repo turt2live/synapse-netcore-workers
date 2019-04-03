@@ -588,22 +588,24 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 foreach (var listEvent in deviceLists)
                 {
                     var contentSet = listEvent.content;
+                    var userId = (string) contentSet["user_id"];
+                    var deviceId = (string) contentSet["device_id"];
+                    var streamId = (int) contentSet["stream_id"];
 
-                    foreach (var msg in db.DeviceListsOutboundPokes
-                                          .Where(p => p.Destination == transaction.Destination &&
-                                                      p.UserId == (string) contentSet["user_id"] &&
-                                                      p.DeviceId == (string) contentSet["device_id"] &&
-                                                      p.StreamId == (int) contentSet["stream_id"] &&
-                                                      !p.Sent))
-                    {
-                        log.Debug("Marking device {user_id} {device_id} {destination} {stream_id}",
-                                  msg.UserId,
-                                  msg.DeviceId,
-                                  msg.Destination,
-                                  msg.StreamId);
+                    log.Debug("Marking device {user_id} {device_id} {destination} {stream_id}",
+                              userId,
+                              deviceId,
+                              transaction.Destination,
+                              streamId);
 
-                        msg.Sent = true;
-                    }
+                    var entry = db.DeviceListsOutboundPokes.FirstOrDefault(p => p.Destination == transaction.Destination &&
+                                                                                p.UserId == userId &&
+                                                                                p.DeviceId == deviceId &&
+                                                                                p.StreamId == streamId && 
+                                                                                p.Sent == false);
+
+                    if (entry != null)
+                        entry.Sent = true;
                 }
 
                 db.SaveChanges();
