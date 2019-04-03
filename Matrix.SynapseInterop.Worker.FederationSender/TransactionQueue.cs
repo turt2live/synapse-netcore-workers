@@ -584,30 +584,24 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 if (deviceLists.Count == 0) return;
 
                 _destLastDeviceListStreamId[transaction.Destination] = deviceLists.Max(e => e.StreamId);
-
-                var deviceListEntries = db.DeviceListsOutboundPokes
-                                          .Where(m =>
-                                                     m.Destination == transaction.Destination && 
-                                                     deviceLists.FindIndex(e => e.StreamId == m.StreamId &&
-                                                                                (string)e.content["user_id"] == m.UserId) >= 0);
-
-                if (deviceListEntries.Any())
+                
+                foreach (var listEvent in deviceLists)
                 {
-                    foreach (var msg in deviceListEntries)
+                    var contentSet = listEvent.content;
+
+                    foreach (var msg in db.DeviceListsOutboundPokes
+                                          .Where(p => p.Destination == transaction.Destination &&
+                                                      p.UserId == (string) contentSet["user_id"] &&
+                                                      p.DeviceId == (string) contentSet["device_id"] &&
+                                                      p.StreamId == (int) contentSet["stream_id"]))
                     {
                         log.Debug("Marking device {user_id} {device_id} {destination}",
-                msg.UserId,
-                msg.DeviceId,
-                msg.Destination);
+                                  msg.UserId,
+                                  msg.DeviceId,
+                                  msg.Destination);
 
                         msg.Sent = true;
                     }
-
-                    db.SaveChanges();
-                }
-                else
-                {
-                    log.Warning("No device lists to mark as sent, despite sending lists in this txn");
                 }
             }
         }
