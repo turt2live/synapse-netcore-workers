@@ -595,14 +595,17 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                                       p.DeviceId == (string) contentSet["device_id"] &&
                                                       p.StreamId == (int) contentSet["stream_id"]))
                     {
-                        log.Debug("Marking device {user_id} {device_id} {destination}",
+                        log.Debug("Marking device {user_id} {device_id} {destination} {stream_id}",
                                   msg.UserId,
                                   msg.DeviceId,
-                                  msg.Destination);
+                                  msg.Destination,
+                                  msg.StreamId);
 
                         msg.Sent = true;
                     }
                 }
+
+                db.SaveChanges();
             }
         }
 
