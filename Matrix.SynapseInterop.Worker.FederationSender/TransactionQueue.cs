@@ -593,7 +593,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                                           .Where(p => p.Destination == transaction.Destination &&
                                                       p.UserId == (string) contentSet["user_id"] &&
                                                       p.DeviceId == (string) contentSet["device_id"] &&
-                                                      p.StreamId == (int) contentSet["stream_id"]))
+                                                      p.StreamId == (int) contentSet["stream_id"] &&
+                                                      !p.Sent))
                     {
                         log.Debug("Marking device {user_id} {device_id} {destination} {stream_id}",
                                   msg.UserId,
