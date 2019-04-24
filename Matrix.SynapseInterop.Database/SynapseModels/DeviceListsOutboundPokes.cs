@@ -11,9 +11,11 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
         public int StreamId { get; set; }
 
         [Column("user_id")]
+        [Key]
         public string UserId { get; set; }
 
         [Column("device_id")]
+        [Key]
         public string DeviceId { get; set; }
 
         [Column("sent")]
@@ -23,6 +25,7 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
         public long Ts { get; set; }
 
         [Column("destination")]
+        [Key]
         public string Destination { get; set; }
     }
 }

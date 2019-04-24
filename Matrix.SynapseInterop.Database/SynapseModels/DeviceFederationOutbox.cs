@@ -7,6 +7,7 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
     public class DeviceFederationOutbox
     {
         [Column("destination")]
+        [Key]
         public string Destination { get; set; }
 
         [Column("stream_id")]
