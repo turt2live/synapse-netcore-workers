@@ -7,11 +7,9 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
     public class DeviceFederationOutbox
     {
         [Column("destination")]
-        [Key]
         public string Destination { get; set; }
 
         [Column("stream_id")]
-        [Key]
         public int StreamId { get; set; }
 
         [Column("queued_ts")]

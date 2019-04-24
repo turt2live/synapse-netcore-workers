@@ -32,6 +32,14 @@ namespace Matrix.SynapseInterop.Database
             _connString = connectionString;
         }
 
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<DeviceListsOutboundPokes>()
+                .HasKey(c => new { c.StreamId, c.UserId, c.DeviceId, c.Destination });
+            modelBuilder.Entity<DeviceFederationOutbox>()
+                .HasKey(c => new { c.StreamId, c.Destination });
+        }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             optionsBuilder.UseNpgsql(_connString).UseLoggerFactory(LoggerFactory);
