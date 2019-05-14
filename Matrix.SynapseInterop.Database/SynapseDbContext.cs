@@ -15,6 +15,9 @@ namespace Matrix.SynapseInterop.Database
         public static string DefaultConnectionString { get; set; }
         private static readonly SerilogLoggerFactory LoggerFactory = new SerilogLoggerFactory(Log.ForContext<SynapseDbContext>());
 
+        public DbQuery<RoomAccountData> RoomAccountData { get; set; }
+        public DbQuery<AccountData> AccountData { get; set; }
+        public DbQuery<EventPushSummary> EventPushSummary { get; set; }
         public DbQuery<EventJson> EventsJson { get; set; }
         public DbQuery<Event> Events { get; set; }
         public DbQuery<RoomMembership> RoomMemberships { get; set; }
@@ -24,6 +27,19 @@ namespace Matrix.SynapseInterop.Database
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
         public DbQuery<RoomAlias> RoomAliases { get; set; }
+        public DbQuery<AccessToken> AccessTokens { get; set; }
+        public DbQuery<User> Users { get; set; }
+        public DbQuery<CurrentStateEvents> CrntRoomState { get; set; }
+        
+        public DbQuery<EventToStateGroup> EventToStateGroups { get; set; }
+        public DbQuery<StateGroup> StateGroups { get; set; }
+        public DbQuery<StateGroupsState> StateGroupsStates { get; set; }
+        public DbQuery<StateGroupEdge> StateGroupEdges { get; set; }
+        public DbQuery<DeviceMaxStreamId> DeviceMaxStreamId { get; set; }
+        public DbQuery<DeviceInboxItem> DeviceInbox { get; set; }
+        public DbQuery<E2EOneTimeKey> E2EOneTimeKeys { get; set; }
+        public DbQuery<DeviceListsStream> DeviceListsStream { get; set; }
+        public DbQuery<UsersWhoShareRooms> UsersWhoShareRooms { get; set; }
 
         public SynapseDbContext() : this(DefaultConnectionString) { }
 
@@ -91,17 +107,46 @@ namespace Matrix.SynapseInterop.Database
             }
         }
 
-        public IEnumerable<EventJsonSet> GetAllNewEventsStream(int fromId, int currentId, int limit)
+        public IEnumerable<EventJsonSet> GetAllNewEventsStream(int fromId, int currentId, int limit = -1)
         {
             using (WorkerMetrics.DbCallTimer("GetAllNewEventsStream"))
             {
                 // No tracking optimisation, we are unlikely to need the same event twice for the federation sender.
-                return Events
-                      .AsNoTracking()
-                      .OrderBy(e => e.StreamOrdering)
-                      .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId)
-                      .Take(limit).Select(ev => new EventJsonSet(ev));
+                var s = Events
+                       .AsNoTracking()
+                       .OrderBy(e => e.StreamOrdering)
+                       .Where(e => e.StreamOrdering > fromId && e.StreamOrdering <= currentId);
+
+                if (limit != -1)
+                {
+                    s = s.Take(limit);
+                }
+
+                return s.Select(ev => new EventJsonSet(ev, null));
             }
+        }
+
+        public bool GetUserForToken(string accessToken, out User user, out AccessToken token)
+        {
+            user = null;
+            token = null;
+
+            var aToken = AccessTokens.FirstOrDefault(at => at.Token == accessToken);
+
+            if (aToken == null)
+            {
+                return false;
+            }
+            
+            token = aToken;
+            user = Users.FirstOrDefault(u => u.Name == aToken.UserId);
+            return user != null;
+        }
+
+        public IQueryable<RoomMembership> GetMembershipForUser(string userId)
+        {
+            // RoomMemberships can lie about current membership, so check against the room state.
+            return RoomMemberships.Where((u) => u.UserId == userId && CrntRoomState.Any(e => e.EventId == u.EventId));
         }
     }
 }

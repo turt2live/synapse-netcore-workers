@@ -12,13 +12,21 @@ namespace Matrix.SynapseInterop.Database
         public int Version { get; private set; }
         private JObject _json;
         
-        public EventJsonSet(Event baseEvent)
+        public EventJsonSet(Event baseEvent, EventJson jsonEv = null)
         {
             EventId = baseEvent.EventId;
             RoomId = baseEvent.RoomId;
             StreamOrdering = baseEvent.StreamOrdering;
             Sender = baseEvent.Sender;
             Type = baseEvent.Type;
+
+            if (jsonEv != null)
+            {
+                _json = JObject.Parse(jsonEv.Json);
+                Version = jsonEv.FormatVersion;
+                return;
+            }
+
             _json = null;
             Version = -1;
         }

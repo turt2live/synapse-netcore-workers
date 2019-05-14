@@ -2,17 +2,16 @@
 
 namespace Matrix.SynapseInterop.Database.SynapseModels
 {
-    [Table("device_lists_stream")]
-    public class DeviceListsStream
+    [Table("access_tokens")]
+    public class AccessToken
     {
-        [Column("stream_id")]
-        public int StreamId { get; set; }
-
         [Column("user_id")]
         public string UserId { get; set; }
-
+        
         [Column("device_id")]
         public string DeviceId { get; set; }
-
+        
+        [Column("token")]
+        public string Token { get; set; }
     }
 }

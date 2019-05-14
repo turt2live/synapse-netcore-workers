@@ -2,8 +2,8 @@
 
 namespace Matrix.SynapseInterop.Database.SynapseModels
 {
-    [Table("device_lists_stream")]
-    public class DeviceListsStream
+    [Table("device_inbox")]
+    public class DeviceInboxItem
     {
         [Column("stream_id")]
         public int StreamId { get; set; }
@@ -13,6 +13,8 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
 
         [Column("device_id")]
         public string DeviceId { get; set; }
-
+        
+        [Column("message_json")]
+        public string MessageJson { get; set; }
     }
 }

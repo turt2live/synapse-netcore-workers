@@ -241,17 +241,23 @@ namespace Matrix.SynapseInterop.Replication
 
         private void SendPing(object context)
         {
-            SendRaw("PING " + DateTime.Now.ToBinary());
+            SendRaw($"PING {DateTime.Now.ToBinary()}");
         }
 
         public void SubscribeStream(string streamName, string position)
         {
-            SendRaw("REPLICATE " + streamName + " " + position);
+            SendRaw($"REPLICATE {streamName} {position}");
         }
 
         public void SendFederationAck(string token)
         {
             SendRaw($"FEDERATION_ACK {token}");
+        }
+
+        public void SendUserSync(string userId, bool isSyncing, string lastSyncMs)
+        {
+            var state = isSyncing ? "start" : "end";
+            SendRaw($"USER_SYNC {userId} {state} {lastSyncMs}");
         }
 
         public ReplicationStream<T> BindStream<T>() where T : IReplicationDataRow

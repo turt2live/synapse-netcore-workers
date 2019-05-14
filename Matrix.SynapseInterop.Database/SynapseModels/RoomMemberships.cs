@@ -19,5 +19,8 @@ namespace Matrix.SynapseInterop.Database.SynapseModels
 
         [Column("membership")]
         public string Membership { get; set; }
+
+        [Column("forgotten")]
+        public int Forgotten { get; set; }
     }
 }

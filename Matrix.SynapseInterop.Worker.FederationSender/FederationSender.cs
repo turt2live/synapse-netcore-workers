@@ -73,6 +73,18 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             {
                 UpdateFederationPos("federation", _stream_position);
             };
+            
+            // Newer versions of synapse expect us to create reciepts too.
+            if (_config.GetSection("federation").GetValue<bool>("handleReceipts"))
+            {
+                _receiptStream = _synapseReplication.BindStream<ReceiptStreamRow>();
+                _receiptStream.DataRow += OnReceiptRow;
+            }
+        }
+
+        private void OnReceiptRow(object sender, ReceiptStreamRow e)
+        {
+            _transactionQueue?.OnReciept(e);
         }
 
         private void OnReceiptRow(object sender, ReceiptStreamRow e)
@@ -129,9 +141,9 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
         }
 
-        private void OnEventPositionUpdate(object sender, string stream_pos)
+        private void OnEventPositionUpdate(object sender, string streamPos)
         {
-            _transactionQueue?.OnEventUpdate(stream_pos);
+            _transactionQueue?.OnEventUpdate(streamPos);
         }
 
         private void Replication_ServerName(object sender, string serverName)
