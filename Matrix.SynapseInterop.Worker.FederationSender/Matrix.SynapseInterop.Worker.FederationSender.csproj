@@ -4,6 +4,7 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Matrix.SynapseInterop.Replication" Version="0.1.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="2.2.0" />
@@ -17,7 +18,6 @@
     <ProjectReference Include="..\Matrix.SynapseInterop.Common.MatrixUtils\Matrix.SynapseInterop.Common.MatrixUtils.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Common\Matrix.SynapseInterop.Common.csproj" />
     <ProjectReference Include="..\Matrix.SynapseInterop.Database\Matrix.SynapseInterop.Database.csproj" />
-    <ProjectReference Include="..\Matrix.SynapseInterop.Replication\Matrix.SynapseInterop.Replication.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update=".dockerignore">
