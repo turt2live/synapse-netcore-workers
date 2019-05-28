@@ -77,8 +77,11 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     // This means they don't want to federate with us :(
                     isDown = true;
                 }
-                else if (txEx.Code == HttpStatusCode.NotFound)
+                else if (txEx.Code == HttpStatusCode.NotFound || txEx.Code == HttpStatusCode.MethodNotAllowed)
+                {
+                    // The endpoint has gone, or doesn't exist. Give up.
                     isDown = true;
+                }
                 else if (txEx.Code == HttpStatusCode.BadGateway || txEx.Code == HttpStatusCode.ServiceUnavailable)
                 {
                     strike = true;
