@@ -22,8 +22,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
     {
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
-        // If a room has more hosts than MAX_HOSTS_FOR_PRESENCE, ignore that room.
-        private readonly int _maxHostsForPresence = 40;
+        // If a room has more hosts than _maxHostsForPresence, ignore that room.
+        private readonly int _maxHostsForPresence;
         private readonly TimeSpan minDelayBetweenTxns = TimeSpan.FromMilliseconds(150);
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly Backoff _backoff;
