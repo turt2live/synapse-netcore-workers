@@ -23,7 +23,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private const int MAX_PDUS_PER_TRANSACTION = 50;
         private const int MAX_EDUS_PER_TRANSACTION = 100;
         // If a room has more hosts than MAX_HOSTS_FOR_PRESENCE, ignore that room.
-        private const int MaxHostsForPresence = 40;
+        private readonly int _maxHostsForPresence = 40;
         private readonly TimeSpan minDelayBetweenTxns = TimeSpan.FromMilliseconds(150);
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly Backoff _backoff;
@@ -47,7 +47,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         public TransactionQueue(string serverName,
                                 string connectionString,
                                 SigningKey key,
-                                IConfigurationSection clientConfig
+                                IConfigurationSection clientConfig,
+                                IConfigurationSection cacheConfig
         )
         {
             _client = new FederationClient(serverName, key, clientConfig);
@@ -64,9 +65,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _lastEventPoke = -1;
             _signingKey = key;
             _backoff = new Backoff();
-            var roomCacheSize = clientConfig.GetSection("caches").GetValue("roomCacheSize", -1);
+            var roomCacheSize = cacheConfig.GetValue<int>("roomCacheSize");
             _roomCache = new CachedMatrixRoomSet(roomCacheSize);
             _destLastTxnTime = new Dictionary<string, DateTime>();
+            _maxHostsForPresence = clientConfig.GetValue<int>("maxHostsForPresence");
         }
     
         public bool OnEventUpdate(string streamPos)
@@ -651,7 +653,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     foreach (var room in _roomCache.GetJoinedRoomsForUser(presence.user_id))
                     {
-                        if (room.Hosts.Length > MaxHostsForPresence)
+                        if (_maxHostsForPresence != -1 && room.Hosts.Length > _maxHostsForPresence)
                         {
                             // Don't include rooms with losts of hosts, because it slows shit down.
                             // TODO: This is not very nice, but things like HQ exist. Fundamentally this
