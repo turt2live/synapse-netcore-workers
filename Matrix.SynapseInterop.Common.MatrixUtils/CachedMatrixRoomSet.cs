@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Matrix.SynapseInterop.Common.Extensions;
 using Matrix.SynapseInterop.Database;
 using Matrix.SynapseInterop.Database.SynapseModels;
 
@@ -11,11 +12,13 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
     {
         private readonly ConcurrentDictionary<string, CachedMatrixRoom> _dict;
         private readonly HashSet<string> _userMembershipComplete;
+        private readonly int maxSize;
 
-        public CachedMatrixRoomSet()
+        public CachedMatrixRoomSet(int maxSize = -1)
         {
             _dict = new ConcurrentDictionary<string, CachedMatrixRoom>();
             _userMembershipComplete = new HashSet<string>();
+            this.maxSize = maxSize;
         }
         
         public CachedMatrixRoom GetRoom(string roomId)
@@ -31,6 +34,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
             room = new CachedMatrixRoom(roomId);
             room.PopulateMemberCache();
             _dict.TryAdd(roomId, room);
+            CheckMaxSize();
             return room;
         }
 
@@ -39,7 +43,18 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
             if (_userMembershipComplete.Contains(userId))
             {
                 WorkerMetrics.ReportCacheHit("CachedMatrixRoomSet.GetJoinedRoomsForUser");
-                return _dict.Values.Where(r => r.Membership.Contains(userId));
+
+                return _dict.Values.Where(r =>
+                {
+                    var c = r.Membership.Contains(userId);
+
+                    if (c)
+                    {
+                        r.LastAccessed = DateTime.Now;
+                    }
+
+                    return c;
+                });
             }
 
             WorkerMetrics.ReportCacheMiss("CachedMatrixRoomSet.GetJoinedRoomsForUser");
@@ -66,10 +81,31 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
 
             return res;
         }
+
+        private void CheckMaxSize()
+        {
+            if (maxSize == -1)
+            {
+                return;
+            }
+
+            var dropCount = _dict.Count - maxSize;
+
+            if (dropCount == 0)
+            {
+                return;
+            }
+
+            _dict.OrderBy((pair => pair.Value.LastAccessed))
+                 .Select((pair => pair.Key))
+                 .ForEach((r) => InvalidateRoom(r));
+        }
     }
 
     public class CachedMatrixRoom
     {
+        public DateTime LastAccessed;
+        
         public readonly string RoomId;
         public List<string> Membership { get; private set; }
         public string[] Hosts { get; private set; }
@@ -78,6 +114,7 @@ namespace Matrix.SynapseInterop.Common.MatrixUtils
         {
             RoomId = roomId;
             Membership = null;
+            LastAccessed = DateTime.Now; 
         }
 
         public void PopulateMemberCache()

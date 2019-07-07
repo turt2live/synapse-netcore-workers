@@ -64,7 +64,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _lastEventPoke = -1;
             _signingKey = key;
             _backoff = new Backoff();
-            _roomCache = new CachedMatrixRoomSet();
+            var roomCacheSize = clientConfig.GetSection("caches").GetValue("roomCacheSize", -1);
+            _roomCache = new CachedMatrixRoomSet(roomCacheSize);
             _destLastTxnTime = new Dictionary<string, DateTime>();
         }
     
