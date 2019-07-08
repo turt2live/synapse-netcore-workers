@@ -9,19 +9,20 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public class FederationHttpClient : HttpClient
     {
-        public FederationHttpClient(bool allowSelfSigned) : base(new SocketsHttpHandler
+        public FederationHttpClient(bool allowSelfSigned, TimeSpan pooledConnectionIdleTimeout, TimeSpan pooledConnectionLifetime) : base(new SocketsHttpHandler
         {
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = (sender, certificate, chain, sslpolicyerrors) => 
                     CheckCert(sslpolicyerrors, allowSelfSigned)
             },
+            // FYI - defaults can be found at https://github.com/dotnet/corefx/blob/c0c370e0576574d8985970200c00ca83ae366d2e/src/Common/src/System/Net/Http/HttpHandlerDefaults.cs#L13
             UseProxy = false,
             UseCookies = false,
             ResponseDrainTimeout = TimeSpan.FromSeconds(15),
             ConnectTimeout = TimeSpan.FromSeconds(30),
-            PooledConnectionIdleTimeout = TimeSpan.Zero,
-            PooledConnectionLifetime = TimeSpan.Zero,
+            PooledConnectionIdleTimeout = pooledConnectionIdleTimeout,
+            PooledConnectionLifetime = pooledConnectionLifetime,
         })
         {
             Timeout = TimeSpan.FromMinutes(1);

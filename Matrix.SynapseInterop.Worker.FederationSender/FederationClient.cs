@@ -30,7 +30,10 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             origin = serverName;
 
             this.key = key;
-            client = new FederationHttpClient(config.GetValue<bool>("allowSelfSigned", false));
+            var connIdleTs = TimeSpan.FromMilliseconds(config.GetValue<int>("connectionIdleTimeoutMs"));
+            var connLifetimeTs = TimeSpan.FromMilliseconds(config.GetValue<int>("connectionLifetimeMs"));
+            var allowSelfSigned = config.GetValue<bool>("allowSelfSigned");
+            client = new FederationHttpClient(allowSelfSigned, connIdleTs, connLifetimeTs);
             hostResolver = new HostResolver(config.GetValue<bool>("defaultToSecurePort") ? 8448 : 8008, client);
         }
         
