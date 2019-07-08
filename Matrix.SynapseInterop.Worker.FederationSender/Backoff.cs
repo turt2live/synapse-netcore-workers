@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -21,16 +22,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private const int StrikesToMarkHostDown = 5;
         private static readonly TimeSpan MaxDelay = TimeSpan.FromDays(1);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
-        private readonly Dictionary<string, SBackoff> _hosts;
+        private readonly ConcurrentDictionary<string, SBackoff> _hosts;
         private readonly Random _random;
 
         public Backoff()
         {
-            _hosts = new Dictionary<string, SBackoff>();
+            _hosts = new ConcurrentDictionary<string, SBackoff>();
             _random = new Random();
         }
 
-        public bool ClearBackoff(string host) => _hosts.Remove(host);
+        public bool ClearBackoff(string host) => _hosts.TryRemove(host, out _);
 
         public bool HostIsDown(string host)
         {
