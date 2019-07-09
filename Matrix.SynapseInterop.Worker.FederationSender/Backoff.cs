@@ -126,7 +126,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                 }
 
-                _hosts.Remove(host);
+                _hosts.TryRemove(host, out _);
                 _hosts.TryAdd(host, h);
             }
             else if (isDown)
@@ -155,7 +155,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             else
             {
-                _hosts.Remove(host);
+                _hosts.TryRemove(host, out _);
             }
 
             if (ex is HttpRequestException || ex is JsonReaderException || ex is SocketException)
@@ -199,7 +199,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 backoff.DelayFor += NormalBackoff * multiplier;
             }
 
-            _hosts.Add(host, backoff);
+            _hosts.TryAdd(host, backoff);
 
             backoff.DelayFor = TimeSpan.FromMilliseconds(Math.Min(MaxDelay.TotalMilliseconds, backoff.DelayFor.TotalMilliseconds));
 
