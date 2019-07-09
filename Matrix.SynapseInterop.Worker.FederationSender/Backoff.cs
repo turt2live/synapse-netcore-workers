@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -21,16 +22,16 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private const int StrikesToMarkHostDown = 5;
         private static readonly TimeSpan MaxDelay = TimeSpan.FromDays(1);
         private static readonly TimeSpan NormalBackoff = TimeSpan.FromSeconds(30);
-        private readonly Dictionary<string, SBackoff> _hosts;
+        private readonly ConcurrentDictionary<string, SBackoff> _hosts;
         private readonly Random _random;
 
         public Backoff()
         {
-            _hosts = new Dictionary<string, SBackoff>();
+            _hosts = new ConcurrentDictionary<string, SBackoff>();
             _random = new Random();
         }
 
-        public bool ClearBackoff(string host) => _hosts.Remove(host);
+        public bool ClearBackoff(string host) => _hosts.TryRemove(host, out _);
 
         public bool HostIsDown(string host)
         {
@@ -125,7 +126,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     }
                 }
 
-                _hosts.Remove(host);
+                _hosts.TryRemove(host, out _);
                 _hosts.TryAdd(host, h);
             }
             else if (isDown)
@@ -154,7 +155,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             }
             else
             {
-                _hosts.Remove(host);
+                _hosts.TryRemove(host, out _);
             }
 
             if (ex is HttpRequestException || ex is JsonReaderException || ex is SocketException)
@@ -198,7 +199,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                 backoff.DelayFor += NormalBackoff * multiplier;
             }
 
-            _hosts.Add(host, backoff);
+            _hosts.TryAdd(host, backoff);
 
             backoff.DelayFor = TimeSpan.FromMilliseconds(Math.Min(MaxDelay.TotalMilliseconds, backoff.DelayFor.TotalMilliseconds));
 
