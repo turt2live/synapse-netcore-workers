@@ -9,7 +9,8 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 {
     public class FederationHttpClient : HttpClient
     {
-        public FederationHttpClient(bool allowSelfSigned, TimeSpan pooledConnectionIdleTimeout, TimeSpan pooledConnectionLifetime) : base(new SocketsHttpHandler
+        public FederationHttpClient(bool allowSelfSigned, TimeSpan connectTimeout,
+                                    TimeSpan pooledConnectionIdleTimeout, TimeSpan pooledConnectionLifetime) : base(new SocketsHttpHandler
         {
             SslOptions = new SslClientAuthenticationOptions
             {
@@ -20,7 +21,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             UseProxy = false,
             UseCookies = false,
             ResponseDrainTimeout = TimeSpan.FromSeconds(15),
-            ConnectTimeout = TimeSpan.FromSeconds(30),
+            ConnectTimeout = connectTimeout,
             PooledConnectionIdleTimeout = pooledConnectionIdleTimeout,
             PooledConnectionLifetime = pooledConnectionLifetime,
         })
