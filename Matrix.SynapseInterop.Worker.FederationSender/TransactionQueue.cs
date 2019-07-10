@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Matrix.SynapseInterop.Common;
 using Matrix.SynapseInterop.Common.Extensions;
@@ -24,7 +23,6 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private const int MAX_EDUS_PER_TRANSACTION = 100;
         // If a room has more hosts than _maxHostsForPresence, ignore that room.
         private readonly int _maxHostsForPresence;
-        private readonly TimeSpan minDelayBetweenTxns = TimeSpan.FromMilliseconds(150);
         private static readonly ILogger log = Log.ForContext<TransactionQueue>();
         private readonly Backoff _backoff;
         private readonly FederationClient _client;
@@ -32,7 +30,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
         private readonly Dictionary<string, long> _destLastDeviceListStreamId;
         private readonly Dictionary<string, long> _destLastDeviceMsgStreamId;
         private readonly Dictionary<string, Task> _destOngoingTrans;
-        private readonly Dictionary<string, DateTime> _destLastTxnTime;
+        private readonly ConcurrentDictionary<string, object> _destLocks;
         private readonly ConcurrentDictionary<string, LinkedList<Transaction>> _destPendingTransactions;
         private readonly CachedMatrixRoomSet _roomCache;
         private readonly string _serverName;
@@ -67,7 +65,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
             _backoff = new Backoff();
             var roomCacheSize = cacheConfig.GetValue<int>("roomCacheSize");
             _roomCache = new CachedMatrixRoomSet(roomCacheSize);
-            _destLastTxnTime = new Dictionary<string, DateTime>();
+            _destLocks = new ConcurrentDictionary<string, object>();
             _maxHostsForPresence = clientConfig.GetValue<int>("maxHostsForPresence");
         }
     
@@ -448,32 +446,18 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
         private void AttemptTransaction(string destination)
         {
+            // Use a lock per destination to avoid per destination slowdowns.
+            var destLock = _destLocks.GetOrAdd(destination, new object());
+
             // Lock here to avoid racing.
-            lock (this)
+            lock (destLock)
             {
-                var now = DateTime.Now;
-
-                if (_destLastTxnTime.TryGetValue(destination, out var lastTime))
-                {
-                    var diff = now - lastTime;
-
-                    if (diff < minDelayBetweenTxns)
-                    {
-                        var delay = minDelayBetweenTxns - diff;
-                        log.Debug("Delaying task for {delay}ms", delay.TotalMilliseconds);
-                        Task.Delay(delay).ContinueWith(_ => AttemptTransaction(destination));
-                        return;
-                    }
-                }
-
                 if (_destOngoingTrans.ContainsKey(destination))
                 {
                     if (!_destOngoingTrans[destination].IsCompleted) return;
                     _destOngoingTrans.Remove(destination);
                 }
 
-                _destLastTxnTime.Remove(destination);
-                _destLastTxnTime.Add(destination, now);
                 var t = AttemptNewTransaction(destination);
                 _destOngoingTrans.Add(destination, t);
             }
