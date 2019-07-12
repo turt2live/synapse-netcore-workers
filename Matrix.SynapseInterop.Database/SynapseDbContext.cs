@@ -21,6 +21,7 @@ namespace Matrix.SynapseInterop.Database
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
         public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
+        public DbSet<DeviceListsOutboundLastSuccess> DeviceListsOutboundLastSuccess { get; set; }
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
         public DbQuery<RoomAlias> RoomAliases { get; set; }
@@ -35,9 +36,13 @@ namespace Matrix.SynapseInterop.Database
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<DeviceListsOutboundPokes>()
-                .HasKey(c => new { c.StreamId, c.UserId, c.DeviceId, c.Destination });
+                        .HasKey(c => new { c.StreamId, c.UserId, c.DeviceId, c.Destination });
+            
             modelBuilder.Entity<DeviceFederationOutbox>()
-                .HasKey(c => new { c.StreamId, c.Destination });
+                        .HasKey(c => new { c.StreamId, c.Destination });
+            
+            modelBuilder.Entity<DeviceListsOutboundLastSuccess>()
+                        .HasKey(c => new { c.Destination, c.UserId});
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -59,11 +64,16 @@ namespace Matrix.SynapseInterop.Database
                     var device = Devices.SingleOrDefault(dev =>
                                                              dev.UserId == devicePoke.UserId &&
                                                              dev.DeviceId == devicePoke.DeviceId);
+                    
+                    // Get the last event sent to this destination successfully.
+                    var previousId =
+                        DeviceListsOutboundLastSuccess
+                           .OrderByDescending(s => s.StreamId)
+                           .FirstOrDefault(success => devicePoke.UserId == success.UserId && 
+                                                      devicePoke.Destination == success.Destination && 
+                                                      devicePoke.StreamId > success.StreamId);
 
-                    var previousIds = DeviceListsOutboundPokes.Where(dev => 
-                                                                         dev.UserId == devicePoke.UserId &&
-                                                                         dev.DeviceId == devicePoke.DeviceId &&
-                                                                         dev.StreamId < devicePoke.StreamId).Select(poke => poke.StreamId).ToArray();
+                    var previousIds = previousId == default ? new int[0] : new int[] {previousId.StreamId};
                     
                     var contentSet = new DeviceContentSet
                     {
