@@ -596,11 +596,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     
                     var successEntry = db.DeviceListsOutboundLastSuccess.FirstOrDefault(p => p.Destination == transaction.Destination && p.UserId == userId);
 
-                    if (successEntry != null && successEntry.StreamId < streamId)
-                    {
-                        successEntry.StreamId = streamId;
-                    }
-                    else
+                    if (successEntry == null)
                     {
                         db.DeviceListsOutboundLastSuccess.Add(new DeviceListsOutboundLastSuccess()
                         {
@@ -609,9 +605,12 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                             Destination = transaction.Destination,
                         });
                     }
-
+                    else if (successEntry.StreamId < streamId)
+                    {
+                        successEntry.StreamId = streamId;
+                    }
                 }
-
+                
                 db.SaveChanges();
             }
         }
