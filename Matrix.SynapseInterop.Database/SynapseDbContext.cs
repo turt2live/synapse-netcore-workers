@@ -21,7 +21,7 @@ namespace Matrix.SynapseInterop.Database
         public DbSet<FederationStreamPosition> FederationStreamPosition { get; set; }
         public DbSet<DeviceFederationOutbox> DeviceFederationOutboxes { get; set; }
         public DbSet<DeviceListsOutboundPokes> DeviceListsOutboundPokes { get; set; }
-        public DbSet<DeviceListsOutboundLastSuccess> DeviceListsOutboundLastSuccess { get; set; }
+        public DbQuery<DeviceListsOutboundLastSuccess> DeviceListsOutboundLastSuccess { get; set; }
         private DbQuery<E2EDeviceKeysJson> E2EDeviceKeysJson { get; set; }
         private DbQuery<Devices> Devices { get; set; }
         public DbQuery<RoomAlias> RoomAliases { get; set; }
