@@ -609,6 +609,23 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
 
                     if (entry != null)
                         entry.Sent = true;
+                    
+                    var successEntry = db.DeviceListsOutboundLastSuccess.FirstOrDefault(p => p.Destination == transaction.Destination && p.UserId == userId);
+
+                    if (successEntry != null && successEntry.StreamId < streamId)
+                    {
+                        successEntry.StreamId = streamId;
+                    }
+                    else
+                    {
+                        db.DeviceListsOutboundLastSuccess.Add(new DeviceListsOutboundLastSuccess()
+                        {
+                            StreamId = streamId,
+                            UserId = userId,
+                            Destination = transaction.Destination,
+                        });
+                    }
+
                 }
 
                 db.SaveChanges();
