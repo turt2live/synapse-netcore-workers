@@ -594,7 +594,7 @@ namespace Matrix.SynapseInterop.Worker.FederationSender
                     if (entry != null)
                         entry.Sent = true;
                     
-                    var successEntry = db.DeviceListsOutboundLastSuccess.FirstOrDefault(p => p.Destination == transaction.Destination && p.UserId == userId);
+                    var successEntry = db.DeviceListsOutboundLastSuccess.OrderByDescending(s => s.StreamId).FirstOrDefault(p => p.Destination == transaction.Destination && p.UserId == userId);
 
                     if (successEntry == null)
                     {
