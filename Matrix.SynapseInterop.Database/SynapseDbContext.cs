@@ -73,7 +73,7 @@ namespace Matrix.SynapseInterop.Database
                                                       devicePoke.Destination == success.Destination && 
                                                       devicePoke.StreamId > success.StreamId);
 
-                    var previousIds = previousId == default ? new int[0] : new int[] {previousId.StreamId};
+                    var previousIds = previousId == default(int) ? new int[0] : new int[] {previousId.StreamId};
                     
                     var contentSet = new DeviceContentSet
                     {
